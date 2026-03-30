@@ -109,7 +109,7 @@ class LLaDAEvalHarness(LM):
         self.constraints_text = kwargs.pop('constraints_text', '')
         self.answer_length = int(kwargs.pop('answer_length', 5))
         self.enable_early_exit = self._as_bool(kwargs.pop('enable_early_exit', False))
-        
+        self.enable_soar = self._as_bool(kwargs.pop('enable_soar', False))
         # Early exit thresholds (optional)
         self.early_threshold = float(kwargs.pop('early_threshold', 7.5))
         self.mid_threshold = float(kwargs.pop('mid_threshold', 5.0))
@@ -281,7 +281,9 @@ class LLaDAEvalHarness(LM):
  
             # Generate with or without early exit
             if self.enable_early_exit:
-                generated_out, gap_data = generate(
+                if self.enable_soar:
+                    from generate_earlyexit_soar import generate
+                generated_out = generate(
                     self.model,
                     prompt,
                     steps=self.steps,
