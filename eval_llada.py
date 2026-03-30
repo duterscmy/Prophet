@@ -304,6 +304,7 @@ class LLaDAEvalHarness(LM):
                         }
                     )
                 else:
+                   from generate_earlyexit import generate
                    generated_out, tmp = generate(
                         self.model,
                         prompt,
