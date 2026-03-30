@@ -376,7 +376,7 @@ def main():
     input_ids = torch.tensor(input_ids).to(device).unsqueeze(0)
     
     # Test with early exit
-    out, gap_data = generate(
+    out = generate(
         model, input_ids, 
         steps=128, 
         gen_length=128, 
