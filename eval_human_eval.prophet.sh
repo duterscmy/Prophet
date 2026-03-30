@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name="soar_eval"
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
-#SBATCH --gres=gpu:4                # 请求2块GPU
+#SBATCH --ntasks-per-node=1
+#SBATCH --gres=gpu:1               # 请求2块GPU
 #SBATCH --time=24:00:00
 #SBATCH -o slurm.%j.%N.out
 #SBATCH -e slurm.%j.%N.err
