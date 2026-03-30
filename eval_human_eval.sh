@@ -14,6 +14,7 @@ conda activate soar
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
 export CUDA_VISIBLE_DEVICES=0
+export HF_ALLOW_CODE_EVAL="1"
 #  --limit 256
 
 accelerate launch eval_llada.py \
