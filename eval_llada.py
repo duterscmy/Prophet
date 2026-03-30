@@ -283,26 +283,47 @@ class LLaDAEvalHarness(LM):
             if self.enable_early_exit:
                 if self.enable_soar:
                     from generate_earlyexit_soar import generate
-                generated_out = generate(
-                    self.model,
-                    prompt,
-                    steps=self.steps,
-                    gen_length=self.gen_length,
-                    block_length=self.block_length,
-                    temperature=0,
-                    cfg_scale=self.cfg,
-                    remasking=self.remasking,
-                    mask_id=self.mask_id,
-                    constraints=constraints,
-                    analyze_gap=True,
-                    answer_start_pos=answer_start_pos,
-                    tokenizer=self.tokenizer,
-                    early_exit_thresholds={
-                        'early': self.early_threshold,
-                        'mid': self.mid_threshold,
-                        'late': self.late_threshold
-                    }
-                )
+                    generated_out = generate(
+                        self.model,
+                        prompt,
+                        steps=self.steps,
+                        gen_length=self.gen_length,
+                        block_length=self.block_length,
+                        temperature=0,
+                        cfg_scale=self.cfg,
+                        remasking=self.remasking,
+                        mask_id=self.mask_id,
+                        constraints=constraints,
+                        analyze_gap=True,
+                        answer_start_pos=answer_start_pos,
+                        tokenizer=self.tokenizer,
+                        early_exit_thresholds={
+                            'early': self.early_threshold,
+                            'mid': self.mid_threshold,
+                            'late': self.late_threshold
+                        }
+                    )
+                else:
+                   generated_out, tmp = generate(
+                        self.model,
+                        prompt,
+                        steps=self.steps,
+                        gen_length=self.gen_length,
+                        block_length=self.block_length,
+                        temperature=0,
+                        cfg_scale=self.cfg,
+                        remasking=self.remasking,
+                        mask_id=self.mask_id,
+                        constraints=constraints,
+                        analyze_gap=True,
+                        answer_start_pos=answer_start_pos,
+                        tokenizer=self.tokenizer,
+                        early_exit_thresholds={
+                            'early': self.early_threshold,
+                            'mid': self.mid_threshold,
+                            'late': self.late_threshold
+                        }
+                    ) 
             else:
                 from generate import generate as generate_baseline
                 generated_out = generate_baseline(
