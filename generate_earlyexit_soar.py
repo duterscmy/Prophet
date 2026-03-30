@@ -391,7 +391,7 @@ def main():
     
     generated_text = tokenizer.batch_decode(out[:, input_ids.shape[1]:], skip_special_tokens=True)[0]
     print(f"Generated: {generated_text}")
-    print(f"Exit info: {gap_data['exit_info']}")
+    # print(f"Exit info: {gap_data['exit_info']}")
 
 
 if __name__ == '__main__':
