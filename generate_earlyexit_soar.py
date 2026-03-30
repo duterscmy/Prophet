@@ -51,8 +51,9 @@ def get_num_transfer_tokens(mask_index, steps):
 @torch.no_grad()
 @torch.no_grad()
 def generate(model, prompt, steps=128, gen_length=128, block_length=128, temperature=0.,
-             cfg_scale=0., remasking='low_confidence', mask_id=126336, max_beam_size=2, log=False, 
-             logits_eos_inf=False, confidence_eos_eot_inf=False):
+             cfg_scale=0., remasking='low_confidence', mask_id=126336, constraints=None,
+             analyze_gap=False, tokenizer=None, answer_start_pos=None, 
+             early_exit_thresholds=None, measure_time=False, **_):
     '''
     Args:
         model: Mask predictor.
@@ -72,7 +73,8 @@ def generate(model, prompt, steps=128, gen_length=128, block_length=128, tempera
     confidence_threshold = 0.95      # 高置信度阈值，超过则并行解码
     min_parallel_tokens = 1          # 并行解码最小token数
     max_parallel_tokens = 5          # 并行解码最大token数
-    
+    log = 1
+    max_beam_size = 2
     # ========== Prophet 配置参数 ==========
     early_exit_thresholds = {
         'min_step': 0.3,      # 最小步数比例（相对于总步数）
@@ -148,14 +150,14 @@ def generate(model, prompt, steps=128, gen_length=128, block_length=128, tempera
                 else:
                     batch_logits = model(batch_sequences).logits
             
-            if logits_eos_inf:
-                batch_logits[:, :, 126081] = -torch.inf
+            # if logits_eos_inf:
+            #     batch_logits[:, :, 126081] = -torch.inf
             
             logits_with_noise = add_gumbel_noise(batch_logits, temperature=temperature)
             batch_x0 = torch.argmax(logits_with_noise, dim=-1)
             
-            if confidence_eos_eot_inf:
-                batch_logits[:, :, 126081] = batch_logits[:, :, 126348] = -torch.inf
+            # if confidence_eos_eot_inf:
+            #     batch_logits[:, :, 126081] = batch_logits[:, :, 126348] = -torch.inf
             
             if remasking == 'low_confidence':
                 p = F.softmax(batch_logits, dim=-1)
