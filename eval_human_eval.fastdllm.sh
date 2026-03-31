@@ -25,11 +25,11 @@ mkdir -p logs
 
 accelerate launch eval_llada.fastdllm.py --tasks humaneval \
   --confirm_run_unsafe_code --model llada_dist \
-  --model_args model_path='GSAI-ML/LLaDA-8B-Instruct',gen_length=${length},steps=${steps},block_length=${block_length},use_cache=True,threshold=0.9,show_speed=True \
+  --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',gen_length=${length},steps=${steps},block_length=${block_length},use_cache=True,threshold=0.9,show_speed=True \
   --output_path evals_results/cache_parallel/humaneval-ns0-${length} --log_samples &> logs/cache_parallel-humaneval-ns0-${length}.log
 
 
 accelerate launch eval_llada.fastdllm.py --tasks mbpp \
   --confirm_run_unsafe_code --model llada_dist \
-  --model_args model_path='GSAI-ML/LLaDA-8B-Instruct',gen_length=${length},steps=${steps},block_length=${block_length},use_cache=True,threshold=0.9,show_speed=True \
+  --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',gen_length=${length},steps=${steps},block_length=${block_length},use_cache=True,threshold=0.9,show_speed=True \
   --output_path evals_results/cache_parallel/mbpp-ns0-${length} --log_samples &> logs/cache_parallel-mbpp-ns0-${length}.log
