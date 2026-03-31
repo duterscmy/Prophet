@@ -229,7 +229,7 @@ def generate_with_prefix_cache_with_soar(model, prompt, steps=128, gen_length=12
     #  Beam search + parallel decoding hyper-params (tunable here)        #
     # ------------------------------------------------------------------ #
     max_beam_size        = 2      # maximum number of beams kept per step
-    confidence_threshold = 0.995  # probability threshold for "high-confidence" parallel decode
+    confidence_threshold = 0.90  # probability threshold for "high-confidence" parallel decode
     min_parallel_tokens  = 1      # min tokens that must exceed threshold to trigger strategy-1
     max_parallel_tokens  = 5      # max tokens decoded in one parallel step
     # ------------------------------------------------------------------ #

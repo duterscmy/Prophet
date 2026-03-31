@@ -26,4 +26,4 @@ mkdir -p logs
 TORCHINDUCTOR_DISABLED=1 accelerate launch eval_llada.fastdllm.py --tasks gsm8k_cot_zeroshot \
   --confirm_run_unsafe_code --model llada_dist \
   --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',gen_length=${length},steps=${steps},block_length=${block_length},use_cache=True,threshold=0.9,show_speed=True,soar=True \
-  --output_path evals_results/cache_parallel_soar/gsm8k_cot_zeroshot-ns0-${length} --log_samples &> logs/cache_parallel_soar-gsm8k_cot_zeroshot-ns0-${length}.log
+  --output_path evals_results/cache_parallel_soar090/gsm8k_cot_zeroshot-ns0-${length} --log_samples &> logs/cache_parallel_soar090-gsm8k_cot_zeroshot-ns0-${length}.log
