@@ -20,4 +20,4 @@ accelerate launch eval_llada.py \
   --tasks gsm8k_cot_zeroshot \
   --model llada_dist \
   --output_path evals_results/prophet_soar/gsm8kns0-${length} --log_samples \
-  --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',enable_early_exit=true,enable_soar=true,constraints_text="200:The|201:answer|202:is",gen_length=256,steps=256,block_length=32,answer_length=5 \
+  --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',enable_early_exit=true,enable_soar=true,constraints_text="200:The|201:answer|202:is",gen_length=256,steps=256,block_length=32,answer_length=5 &> logs/prophet_soar-gsm8k_cot_zeroshot-ns0-${length}.log
