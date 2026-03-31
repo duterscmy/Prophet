@@ -37,6 +37,9 @@ from generate_fastdllm import generate, generate_with_prefix_cache, generate_wit
 from model.modeling_llada import LLaDAModelLM
 import json
 import time
+
+torch.compiler.disable()
+
 def set_seed(seed):
     torch.manual_seed(seed)
     random.seed(seed)
