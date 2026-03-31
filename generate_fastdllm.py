@@ -209,7 +209,7 @@ def generate_with_prefix_cache(model, prompt, steps=128, gen_length=128, block_l
 
 
 @torch.no_grad()
-def generate_with_prefix_cache_soar(model, prompt, steps=128, gen_length=128, block_length=128, temperature=0.,
+def generate_with_prefix_cache_with_soar(model, prompt, steps=128, gen_length=128, block_length=128, temperature=0.,
              remasking='low_confidence', mask_id=126336, threshold=None, factor=None):
     '''
     Args:
