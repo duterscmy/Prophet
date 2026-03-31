@@ -15,7 +15,7 @@ export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
 export CUDA_VISIBLE_DEVICES=0
 export HF_ALLOW_CODE_EVAL="1"
-length=256
+length=512
 
 accelerate launch eval_llada.py \
   --tasks gsm8k_cot_zeroshot \
