@@ -326,19 +326,34 @@ class LLaDAEvalHarness(LM):
                         }
                     ) 
             else:
-                from generate import generate as generate_baseline
-                generated_out = generate_baseline(
-                    self.model,
-                    prompt,
-                    steps=self.steps,
-                    gen_length=self.gen_length,
-                    block_length=self.block_length,
-                    temperature=0,
-                    cfg_scale=self.cfg,
-                    remasking=self.remasking,
-                    mask_id=self.mask_id,
-                    constraints=constraints,
-                )
+                if self.enable_soar:
+                    from generate_soar import generate
+                    generated_out = generate(
+                        self.model,
+                        prompt,
+                        steps=self.steps,
+                        gen_length=self.gen_length,
+                        block_length=self.block_length,
+                        temperature=0,
+                        cfg_scale=self.cfg,
+                        remasking=self.remasking,
+                        mask_id=self.mask_id,
+                        # constraints=constraints,
+                    )
+                else:   
+                    from generate import generate as generate_baseline
+                    generated_out = generate_baseline(
+                        self.model,
+                        prompt,
+                        steps=self.steps,
+                        gen_length=self.gen_length,
+                        block_length=self.block_length,
+                        temperature=0,
+                        cfg_scale=self.cfg,
+                        remasking=self.remasking,
+                        mask_id=self.mask_id,
+                        constraints=constraints,
+                    )
  
             generated_answer = self.tokenizer.decode(generated_out[0][prompt.shape[1]:], skip_special_tokens=False)
             for stop_seq in stop_tokens:
