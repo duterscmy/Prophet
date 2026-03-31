@@ -37,7 +37,8 @@ from generate_fastdllm import generate, generate_with_prefix_cache, generate_wit
 from model.modeling_llada import LLaDAModelLM
 import json
 import time
-
+import torch._dynamo
+torch._dynamo.config.suppress_errors = True
 torch.compiler.disable()
 
 def set_seed(seed):
