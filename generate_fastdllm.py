@@ -207,6 +207,274 @@ def generate_with_prefix_cache(model, prompt, steps=128, gen_length=128, block_l
 
     return x, nfe
 
+
+@torch.no_grad()
+def generate_with_prefix_cache_with_soar(model, prompt, steps=128, gen_length=128, block_length=128, temperature=0.,
+             remasking='low_confidence', mask_id=126336, threshold=None, factor=None):
+    '''
+    Args:
+        model: Mask predictor.
+        prompt: A tensor of shape (1, L).
+        steps: Sampling steps, less than or equal to gen_length.
+        gen_length: Generated answer length.
+        block_length: Block length, less than or equal to gen_length. If less than gen_length, it means using semi_autoregressive remasking.
+        temperature: Categorical distribution sampling temperature.
+        remasking: Remasking strategy. 'low_confidence' or 'random'.
+        mask_id: The toke id of [MASK] is 126336.
+        threshold: Confidence threshold for token transfer.
+        factor: Dynamic factor for token transfer.
+    '''
+    import json
+    import numpy as np
+    
+    # ========== Beam Search 配置参数（直接定义在函数体内部）==========
+    max_beam_size = 2  # 最大beam size
+    log = False  # 是否打印详细日志
+    confidence_threshold = 0.95  # 高置信度阈值
+    min_parallel_tokens = 1  # 并行解码最小token数
+    max_parallel_tokens = 5  # 并行解码最大token数
+    # ============================================================
+    
+    # 初始化beam: [(sequence, cumulative_log_prob, block_progress, records)]
+    x = torch.full((prompt.shape[0], prompt.shape[1] + gen_length), mask_id, dtype=torch.long).to(model.device)
+    x[:, :prompt.shape[1]] = prompt.clone()
+    
+    # 每个beam有自己的records列表
+    beam = [(x.clone(), 0.0, 0, [])]  # (sequence, cumulative_log_prob, current_block, records)
+    prompt_index = (x != mask_id)
+
+    assert gen_length % block_length == 0
+    num_blocks = gen_length // block_length
+
+    assert steps % num_blocks == 0
+    steps_per_block = steps // num_blocks
+
+    if log:
+        print(f"=== Dynamic Beam Search Generation Start ===")
+        print(f"Total blocks: {num_blocks}, Steps per block: {steps_per_block}, Max beam size: {max_beam_size}")
+        print(f"Confidence threshold: {confidence_threshold}")
+        print(f"Initial mask count: {(x == mask_id).sum().item()}")
+    
+    # 全局步数计数
+    global_step = 0
+    
+    for num_block in range(num_blocks):
+        current_block_start = prompt.shape[1] + num_block * block_length
+        current_block_end = current_block_start + block_length
+        
+        if log:
+            print(f"\n=== Processing Block {num_block + 1}/{num_blocks} ===")
+            print(f"Block range: [{current_block_start}, {current_block_end})")
+        
+        # 获取当前block的mask信息
+        block_mask_index = (x[:, current_block_start:current_block_end] == mask_id)
+        num_transfer_tokens = get_num_transfer_tokens(block_mask_index, steps_per_block)
+        
+        # 为每个beam建立KV cache
+        # 由于不同beam的序列不同，需要为每个beam分别处理
+        for beam_idx, (seq, cumulative_log_prob, current_block, records) in enumerate(beam):
+            # 确保current_block与num_block一致
+            if current_block != num_block:
+                continue
+            
+            # 检查当前序列是否还有mask
+            if not (seq == mask_id).any():
+                if log:
+                    print(f"Beam {beam_idx}: Sequence already complete (no masks remaining)")
+                continue
+            
+            # 确定当前处理的block
+            block_start = prompt.shape[1] + current_block * block_length
+            block_end = prompt.shape[1] + (current_block + 1) * block_length
+            
+            # 获取当前block的mask信息
+            mask_index = (seq == mask_id)
+            
+            if log:
+                print(f"\n--- Processing Beam {beam_idx + 1}/{len(beam)} ---")
+                print(f"Current cumulative log prob: {cumulative_log_prob:.4f}")
+                print(f"Current block progress: {current_block}/{num_blocks}")
+            
+            # 构建用于模型的输入（只取当前block之前的序列）
+            # 这里需要根据实际模型forward逻辑来调整
+            # 由于有prefix cache，这里保持原有逻辑但适配beam search
+            
+            # 实际forward过程
+            output = model(seq, use_cache=True)
+            past_key_values = output.past_key_values
+            logits = output.logits
+            
+            # 截断cache（保持原有逻辑）
+            new_past_key_values = []
+            for i in range(len(past_key_values)):
+                new_past_key_values.append(())
+                for j in range(len(past_key_values[i])):
+                    new_past_key_values[i] += (past_key_values[i][j][:, :, :current_block_start],)
+            
+            past_key_values = new_past_key_values
+            
+            # 获取transfer index
+            temp_mask_index = (seq == mask_id)
+            temp_mask_index[:, current_block_end:] = 0
+            
+            if factor is None:
+                x0, transfer_index = get_transfer_index(
+                    logits, temperature, remasking, temp_mask_index, seq,
+                    num_transfer_tokens[:, 0] if threshold is None else None, threshold
+                )
+            else:
+                x0, transfer_index = get_transfer_index_dynamic(
+                    logits, temperature, remasking, temp_mask_index, seq, None, factor
+                )
+            
+            # 更新序列
+            new_seq = seq.clone()
+            new_seq[transfer_index] = x0[transfer_index]
+            
+            # 更新累积log概率
+            if remasking == 'low_confidence':
+                p = F.softmax(logits.to(torch.float64), dim=-1)
+                selected_probs = torch.gather(p, dim=-1, index=x0.unsqueeze(-1)).squeeze(-1)
+                new_log_prob = cumulative_log_prob + selected_probs[transfer_index].sum().item()
+            else:
+                new_log_prob = cumulative_log_prob + len(transfer_index.nonzero())
+            
+            # 更新records
+            new_records = records.copy()
+            transfer_positions = torch.where(transfer_index[0])[0].cpu().numpy()
+            for pos in transfer_positions:
+                new_records.append({
+                    "step": global_step + 1,
+                    "position": int(pos),
+                    "confidence": float(selected_probs[0, pos].item()) if remasking == 'low_confidence' else 1.0,
+                    "token_id": int(x0[0, pos].item())
+                })
+            
+            # 更新block进度
+            new_current_block = current_block
+            if new_current_block < num_blocks - 1:
+                current_block_mask = (new_seq[:, block_start:block_end] == mask_id)
+                if not current_block_mask.any():
+                    new_current_block += 1
+                    if log:
+                        print(f"    Block {current_block} completed, moving to block {new_current_block}")
+            
+            # 更新beam中的序列
+            beam[beam_idx] = (new_seq, new_log_prob, new_current_block, new_records)
+            
+            # 块内迭代
+            i = 1
+            while True:
+                if (new_seq[:, current_block_start:current_block_end] == mask_id).sum() == 0:
+                    break
+                
+                # 更新mask_index
+                mask_index_inner = (new_seq[:, current_block_start:] == mask_id)
+                mask_index_inner[:, block_length:] = 0
+                
+                # Forward with cache
+                logits_inner = model(new_seq[:, current_block_start:], 
+                                    past_key_values=past_key_values, 
+                                    use_cache=True).logits
+                
+                # 添加噪声
+                logits_with_noise = add_gumbel_noise(logits_inner, temperature=temperature)
+                x0_inner = torch.argmax(logits_with_noise, dim=-1)
+                
+                # 获取transfer index
+                if factor is None:
+                    x0_inner, transfer_index_inner = get_transfer_index(
+                        logits_inner, temperature, remasking, mask_index_inner,
+                        new_seq[:, current_block_start:], 
+                        num_transfer_tokens[:, i] if threshold is None else None, threshold
+                    )
+                else:
+                    x0_inner, transfer_index_inner = get_transfer_index_dynamic(
+                        logits_inner, temperature, remasking, mask_index_inner,
+                        new_seq[:, current_block_start:], None, factor
+                    )
+                
+                # 更新序列
+                new_seq[:, current_block_start:][transfer_index_inner] = x0_inner[transfer_index_inner]
+                
+                # 更新累积log概率
+                if remasking == 'low_confidence':
+                    p_inner = F.softmax(logits_inner.to(torch.float64), dim=-1)
+                    selected_probs_inner = torch.gather(p_inner, dim=-1, index=x0_inner.unsqueeze(-1)).squeeze(-1)
+                    new_log_prob += selected_probs_inner[transfer_index_inner].sum().item()
+                
+                # 更新records
+                transfer_positions_inner = torch.where(transfer_index_inner[0])[0].cpu().numpy()
+                for pos in transfer_positions_inner:
+                    new_records.append({
+                        "step": global_step + i + 1,
+                        "position": int(current_block_start + pos),
+                        "confidence": float(selected_probs_inner[0, pos].item()) if remasking == 'low_confidence' else 1.0,
+                        "token_id": int(x0_inner[0, pos].item())
+                    })
+                
+                i += 1
+            
+            # 更新beam
+            beam[beam_idx] = (new_seq, new_log_prob, new_current_block, new_records)
+        
+        # 全局步数更新
+        global_step += steps_per_block
+        
+        # 如果有多个beam，进行beam search的排序和剪枝
+        if len(beam) > 1:
+            # 按log概率排序
+            beam.sort(key=lambda x: x[1], reverse=True)
+            
+            # 去重
+            uniq_beam = []
+            seen = set()
+            for seq, log_prob, block_progress, records in beam:
+                seq_tuple = tuple(seq.flatten().cpu().numpy().tolist())
+                if seq_tuple not in seen:
+                    seen.add(seq_tuple)
+                    uniq_beam.append((seq, log_prob, block_progress, records))
+            
+            # 保留top k个
+            beam = uniq_beam[:max_beam_size]
+            
+            if log:
+                print(f"\nBeam search after block {num_block + 1}:")
+                print(f"  Beam size: {len(beam)}")
+                print(f"  Best score: {beam[0][1]:.4f}")
+    
+    # 选择beam中最好的序列作为最终结果
+    if beam:
+        best_sequence, best_score, _, best_records = beam[0]
+        
+        if log:
+            print(f"\n=== Dynamic Beam Search Generation Complete ===")
+            print(f"Final sequence score: {best_score:.4f}")
+            print(f"Final mask count: {(best_sequence == mask_id).sum().item()}")
+            print(f"Total decoding records: {len(best_records)}")
+            
+            if best_records:
+                steps_used = max(r["step"] for r in best_records)
+                avg_confidence = sum(r["confidence"] for r in best_records) / len(best_records)
+                print(f"Steps used: {steps_used}")
+                print(f"Average confidence: {avg_confidence:.4f}")
+            
+            if not (best_sequence == mask_id).any():
+                print(f"✓ All masks have been filled!")
+            else:
+                print(f"⚠ Still has {(best_sequence == mask_id).sum().item()} masks remaining")
+        
+        # 可选：输出records作为JSON
+        # print(json.dumps(best_records))
+    else:
+        best_sequence = x
+        best_records = []
+        if log:
+            print(f"=== Generation Complete (No valid sequences) ===")
+    
+    return best_sequence, len(best_records)  # 返回序列和nfe
+
+
 @torch.no_grad()
 def generate_with_dual_cache(
     model, prompt, steps=128, gen_length=128, block_length=128, temperature=0.,

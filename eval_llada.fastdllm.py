@@ -33,7 +33,7 @@ from lm_eval.api.registry import register_model
 from tqdm import tqdm
 import os
 from transformers import AutoTokenizer, AutoModel, AutoConfig
-from generate_fastdllm import generate, generate_with_prefix_cache, generate_with_dual_cache
+from generate_fastdllm import generate, generate_with_prefix_cache, generate_with_dual_cache, generate_with_prefix_cache_with_soar
 from model.modeling_llada import LLaDAModelLM
 import json
 import time
@@ -71,6 +71,7 @@ class LLaDAEvalHarness(LM):
         save_dir=None,
         show_speed=False,
         dual_cache=False,
+        soar=False
         **kwargs,
     ):
         '''
@@ -136,6 +137,8 @@ class LLaDAEvalHarness(LM):
         self.save_dir = save_dir
         self.show_speed = show_speed
         self.dual_cache = dual_cache
+        self.soar = soar
+
     @property
     def rank(self):
         return self._rank
@@ -345,8 +348,12 @@ class LLaDAEvalHarness(LM):
                     generated_answer, nfe = generate_with_dual_cache(self.model, input_ids, steps=self.steps, gen_length=self.gen_length, block_length=self.block_length, 
                                         temperature=0, remasking=self.remasking, mask_id=self.mask_id, threshold=self.threshold, factor=self.factor)
                 else:
-                    generated_answer, nfe = generate_with_prefix_cache(self.model, input_ids, steps=self.steps, gen_length=self.gen_length, block_length=self.block_length, 
-                                        temperature=0, remasking=self.remasking, mask_id=self.mask_id, threshold=self.threshold, factor=self.factor)
+                    if not self.soar:
+                        generated_answer, nfe = generate_with_prefix_cache(self.model, input_ids, steps=self.steps, gen_length=self.gen_length, block_length=self.block_length, 
+                                            temperature=0, remasking=self.remasking, mask_id=self.mask_id, threshold=self.threshold, factor=self.factor)
+                    else:
+                        generated_answer, nfe = generate_with_prefix_cache_with_soar(self.model, input_ids, steps=self.steps, gen_length=self.gen_length, block_length=self.block_length, 
+                                            temperature=0, remasking=self.remasking, mask_id=self.mask_id, threshold=self.threshold, factor=self.factor)
             else:
                 generated_answer, nfe = generate(self.model, input_ids, steps=self.steps, gen_length=self.gen_length, block_length=self.block_length, 
                                         temperature=0, remasking=self.remasking, mask_id=self.mask_id, threshold=self.threshold, factor=self.factor)
