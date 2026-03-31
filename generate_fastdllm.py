@@ -229,7 +229,7 @@ def generate_with_prefix_cache_with_soar(model, prompt, steps=128, gen_length=12
     #  Beam search + parallel decoding hyper-params (tunable here)        #
     # ------------------------------------------------------------------ #
     max_beam_size        = 2      # maximum number of beams kept per step
-    confidence_threshold = 0.90  # probability threshold for "high-confidence" parallel decode
+    confidence_threshold = 0.995  # probability threshold for "high-confidence" parallel decode
     min_parallel_tokens  = 1      # min tokens that must exceed threshold to trigger strategy-1
     max_parallel_tokens  = 5      # max tokens decoded in one parallel step
     # ------------------------------------------------------------------ #
@@ -307,44 +307,34 @@ def generate_with_prefix_cache_with_soar(model, prompt, steps=128, gen_length=12
             ):
                 break
 
-            # -- batch forward for all beams at once ----------------------
-            batch_seqs = torch.cat(
-                [seq[:, current_block_start:] for seq, _, _, _ in beam_with_cache], dim=0
-            )
-            # All beams share the same prompt prefix, so we can use any beam's
-            # trimmed KV cache (they were all built from the same prompt region).
-            shared_past_kv = beam_with_cache[0][3]
-
-            batch_logits = model(
-                batch_seqs, past_key_values=shared_past_kv, use_cache=False
-            ).logits
-            nfe += 1
-
-            # Gumbel noise for sampling
-            logits_with_noise = add_gumbel_noise(batch_logits, temperature=temperature)
-            batch_x0 = torch.argmax(logits_with_noise, dim=-1)   # (num_beams, block_len+)
-
-            if remasking == 'low_confidence':
-                p = F.softmax(batch_logits, dim=-1)
-                batch_x0_p = torch.gather(
-                    p, dim=-1, index=batch_x0.unsqueeze(-1)
-                ).squeeze(-1)
-            elif remasking == 'random':
-                batch_x0_p = torch.rand(batch_x0.shape, device=batch_x0.device)
-            else:
-                raise NotImplementedError(remasking)
-
-            # -- per-beam candidate generation ----------------------------
+            # -- per-beam forward + candidate generation ------------------
+            # Each beam has its own trimmed_kv (batch=1), so we must forward
+            # them individually to avoid batch-dim mismatch in kv cat.
             new_beam_candidates = []
             has_parallel_candidate = False
 
             for beam_idx, (seq, log_prob, records, trimmed_kv) in enumerate(beam_with_cache):
 
-                # Relative logits / predictions for this beam
-                # batch_* tensors index from current_block_start, so offset accordingly
-                logits_rel  = batch_logits[beam_idx:beam_idx + 1]   # (1, rel_len, vocab)
-                x0_rel      = batch_x0[beam_idx:beam_idx + 1]       # (1, rel_len)
-                x0_p_rel    = batch_x0_p[beam_idx:beam_idx + 1]     # (1, rel_len)
+                # Forward only this beam's suffix, with its own prefix KV cache
+                beam_logits = model(
+                    seq[:, current_block_start:],
+                    past_key_values=trimmed_kv,
+                    use_cache=False
+                ).logits                                    # (1, rel_len, vocab)
+                nfe += 1
+
+                logits_with_noise = add_gumbel_noise(beam_logits, temperature=temperature)
+                x0_rel  = torch.argmax(logits_with_noise, dim=-1)  # (1, rel_len)
+
+                if remasking == 'low_confidence':
+                    p      = F.softmax(beam_logits, dim=-1)
+                    x0_p_rel = torch.gather(
+                        p, dim=-1, index=x0_rel.unsqueeze(-1)
+                    ).squeeze(-1)                           # (1, rel_len)
+                elif remasking == 'random':
+                    x0_p_rel = torch.rand(x0_rel.shape, device=x0_rel.device)
+                else:
+                    raise NotImplementedError(remasking)
 
                 # Positions inside the current block (relative to current_block_start)
                 block_mask_rel = (seq[:, current_block_start:current_block_end] == mask_id)[0]
