@@ -17,6 +17,8 @@ export CUDA_VISIBLE_DEVICES=0
 export HF_ALLOW_CODE_EVAL="1"
 #  --limit 256
 
+length=256
+
 accelerate launch eval_llada.py \
   --tasks humaneval \
   --confirm_run_unsafe_code --model llada_dist \
