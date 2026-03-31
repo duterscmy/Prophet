@@ -71,7 +71,7 @@ class LLaDAEvalHarness(LM):
         save_dir=None,
         show_speed=False,
         dual_cache=False,
-        soar=False
+        soar=False,
         **kwargs,
     ):
         '''
