@@ -19,5 +19,5 @@ length=512
 accelerate launch eval_llada.py \
   --tasks mbpp \
   --confirm_run_unsafe_code --model llada_dist \
-  --output_path evals_results/soar095/mbpp-ns0-${length} --log_samples \
-  --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',enable_early_exit=false,enable_soar=true,constraints_text="200:The|201:answer|202:is",gen_length=${length},steps=${length},block_length=32,answer_length=5 &> logs/soar095-mbpp-ns0-${length}.log
+  --output_path evals_results/soar0995/mbpp-ns0-${length} --log_samples \
+  --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',enable_early_exit=false,enable_soar=true,constraints_text="200:The|201:answer|202:is",gen_length=${length},steps=${length},block_length=32,answer_length=5 &> logs/soar0995-mbpp-ns0-${length}.log
