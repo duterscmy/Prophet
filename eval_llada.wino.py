@@ -287,10 +287,10 @@ class LLaDAEvalHarness(LM):
                 block_length=self.block_length,
                 temperature=0.,
                 mask_id=self.mask_id,
-                threshold=self.early_threshold = 0.6,
-                threshold_back=self.late_threshold = 0.9,
+                threshold= 0.6,
+                threshold_back= 0.9,
             )
-            
+
             generated_answer = self.tokenizer.decode(generated_out[0][prompt.shape[1]:], skip_special_tokens=False)
             for stop_seq in stop_tokens:
                     if stop_seq in generated_answer:
