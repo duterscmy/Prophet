@@ -21,4 +21,4 @@ accelerate launch eval_llada.wino.py \
   --tasks gsm8k_cot_zeroshot \
   --model llada_dist \
   --output_path evals_results/wino/gsm8kns0-${length} --log_samples \
-  --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',enable_early_exit=false,enable_soar=false,gen_length=${length},steps=${length},block_length=32  #&> logs/wino-gsm8k_cot_zeroshot-ns0-${length}.log
+  --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct-wino',enable_early_exit=false,enable_soar=false,gen_length=${length},steps=${length},block_length=32  #&> logs/wino-gsm8k_cot_zeroshot-ns0-${length}.log
