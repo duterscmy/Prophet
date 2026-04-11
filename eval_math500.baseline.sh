@@ -16,10 +16,10 @@ export HF_DATASETS_OFFLINE=0
 export CUDA_VISIBLE_DEVICES=0
 #  --limit 256
 length=256
-
+block=16
 accelerate launch eval_llada.py \
   --tasks minerva_math500 \
   --model llada_dist \
   --num_fewshot 0 \
   --output_path evals_results/baseline/math500-ns0-${length} --log_samples \
-  --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',enable_early_exit=false,enable_soar=false,gen_length=${length},steps=${length},block_length=32,answer_length=5 &> logs/baseline-math500-ns0-${length}.log
+  --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',enable_early_exit=false,enable_soar=false,gen_length=${length},steps=${length},block_length=${block},answer_length=5 &> logs/baseline-math500-ns0-length${length}-block${block}.log
