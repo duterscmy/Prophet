@@ -20,5 +20,5 @@ block=32
 accelerate launch eval_llada.py \
   --tasks gsm8k_cot_zeroshot \
   --model llada_dist \
-  --output_path evals_results/baseline/gsm8kns0-${length} --log_samples \
+  --output_path evals_results/baseline/gsm8kns0-${length}-${block} --log_samples \
   --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',enable_early_exit=false,enable_soar=false,constraints_text="200:The|201:answer|202:is",gen_length=${length},steps=${length},block_length=${block},answer_length=5 &> logs/baseline-gsm8k_cot_zeroshot-ns0-length${length}-block${block}.log

@@ -108,7 +108,7 @@ def generate_origin(model, prompt, steps=128, gen_length=128, block_length=128, 
 
 
 def generate(model, prompt, steps=128, gen_length=128, block_length=128, temperature=0.,
-             cfg_scale=0., remasking='low_confidence', mask_id=126336, log=False, logits_eos_inf=False, confidence_eos_eot_inf=False):
+             cfg_scale=0., remasking='low_confidence', mask_id=126336, constraints=None, log=False, logits_eos_inf=False, confidence_eos_eot_inf=False):
     '''
     Args:
         model: Mask predictor.
@@ -129,6 +129,13 @@ def generate(model, prompt, steps=128, gen_length=128, block_length=128, tempera
     x = torch.full((1, prompt.shape[1] + gen_length), mask_id, dtype=torch.long).to(model.device)
     x[:, :prompt.shape[1]] = prompt.clone()
 
+    # Apply constraints
+    if constraints is not None:
+        for pos, token_id in constraints.items():
+            absolute_pos = prompt.shape[1] + pos
+            if absolute_pos < x.shape[1]:
+                x[:, absolute_pos] = token_id
+    
     prompt_index = (x != mask_id)
 
     assert gen_length % block_length == 0

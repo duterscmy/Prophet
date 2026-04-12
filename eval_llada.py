@@ -352,7 +352,7 @@ class LLaDAEvalHarness(LM):
                         cfg_scale=self.cfg,
                         remasking=self.remasking,
                         mask_id=self.mask_id,
-                        # constraints=constraints,
+                        constraints=constraints,
                     )
  
             generated_answer = self.tokenizer.decode(generated_out[0][prompt.shape[1]:], skip_special_tokens=False)
