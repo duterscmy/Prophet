@@ -122,8 +122,6 @@ def generate(model, prompt, steps=128, gen_length=128, block_length=128, tempera
         mask_id: The toke id of [MASK] is 126336.
     '''
     import json
-
-    # temperature = 0.5
     print("======greedy, temperature: {:.1f}====".format(temperature))
     
     x = torch.full((1, prompt.shape[1] + gen_length), mask_id, dtype=torch.long).to(model.device)
@@ -146,31 +144,14 @@ def generate(model, prompt, steps=128, gen_length=128, block_length=128, tempera
     
     # 初始化records列表
     records = []
-
-    if log:
-        print(f"=== Generation Start ===")
-        print(f"Total blocks: {num_blocks}, Steps per block: {steps}")
-        print(f"Initial x shape: {x.shape}")
-        print(f"Initial x[-128:]: {x[0, -128:].cpu().float().detach().numpy()}")
         
-
     for num_block in range(num_blocks):
-        if log:
-            print(f"=== Block {num_block + 1}/{num_blocks} ===")
         block_start = prompt.shape[1] + num_block * block_length
         block_end = prompt.shape[1] + (num_block + 1) * block_length
         block_mask_index = (x[:, block_start:block_end] == mask_id)
-        num_transfer_tokens = get_num_transfer_tokens(block_mask_index, steps)
-        
-        if log:
-            print(f"Block range: [{block_start}, {block_end})")
-            print(f"Num transfer tokens: {num_transfer_tokens}")
-            
+        num_transfer_tokens = get_num_transfer_tokens(block_mask_index, steps)           
 
-        for i in range(steps):
-            if log:
-                print(f"--- Step {i + 1}/{steps} (Block {num_block + 1}) ---")
-            
+        for i in range(steps):            
             mask_index = (x == mask_id)
             if cfg_scale > 0.:
                 un_x = x.clone()
@@ -208,11 +189,7 @@ def generate(model, prompt, steps=128, gen_length=128, block_length=128, tempera
             # (1) 打印所有mask position的confidence
             mask_positions = torch.where(mask_index[0])[0]
             mask_confidence = confidence[0, mask_positions]
-            
-            if log:
-                print(f"Mask positions (indices): {mask_positions.cpu().float().detach().numpy()}")
-                print(f"Mask confidences: {mask_confidence.cpu().float().detach().numpy()}")
-            
+              
             transfer_index = torch.zeros_like(x0, dtype=torch.bool, device=x0.device)
             selected_positions = []
             selected_confidences = []
@@ -244,39 +221,15 @@ def generate(model, prompt, steps=128, gen_length=128, block_length=128, tempera
                 print(f"Selected confidences: {selected_confidences}")
             
             # 保存unmask前的状态用于比较
-            x_before = x.clone()
             x[transfer_index] = x0[transfer_index]
             
-            # (3) 打印unmask后的x[-128:]
-            if log:
-                print(f"x[-128:] after unmask: {x[0, -128:].cpu().numpy()}")
-            
-            # 打印unmask的具体变化
-            changed_positions = torch.where(x_before[0] != x[0])[0]
-            if len(changed_positions) > 0:
-                if log:
-                    print(f"Changed positions: {changed_positions.cpu().float().detach().numpy()}")
-                    print(f"Before values: {x_before[0, changed_positions].cpu().float().detach().numpy()}")
-                    print(f"After values: {x[0, changed_positions].cpu().float().detach().numpy()}")
-            
-              # 空行分隔每个step
+            # Maintain constraints
+            if constraints is not None:
+                for pos, token_id in constraints.items():
+                    absolute_pos = prompt.shape[1] + pos
+                    if absolute_pos < x.shape[1]:
+                        x[:, absolute_pos] = token_id
     
-    if log:
-        print(f"=== Generation Complete ===")
-        print(f"Total decoding records: {len(records)}")
-        
-        # 输出records的简单统计
-        if records:
-            steps_used = max(r["step"] for r in records)
-            avg_confidence = sum(r["confidence"] for r in records) / len(records)
-            print(f"Steps used: {steps_used}")
-            print(f"Average confidence: {avg_confidence:.4f}")
-            
-            # 输出前几个解码记录作为示例
-            print(f"\n=== Top 5 Decoding Records ===")
-            for idx, record in enumerate(records[:5]):
-                print(f"Step {record['step']} (Block {record['block']}): position {record['position']}, "
-                      f"token {record['token_id']}, confidence {record['confidence']:.4f}")
 
     import json
     # 输出records作为JSON（不带缩进）
