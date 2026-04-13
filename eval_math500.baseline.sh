@@ -22,4 +22,4 @@ accelerate launch eval_llada.py \
   --model llada_dist \
   --num_fewshot 0 \
   --output_path evals_results/baseline/math500-ns0-${length}-${block} --log_samples \
-  --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',enable_early_exit=false,enable_soar=false,gen_length=${length},steps=${length},block_length=${block},answer_length=5 &> logs/baseline-math500-ns0-length${length}-block${block}.log
+  --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',enable_early_exit=false,enable_soar=false,gen_length=${length},steps=${length},block_length=${block},answer_length=5,torch_dtype=torch.bfloat16 &> logs/baseline-math500-ns0-length${length}-block${block}.log

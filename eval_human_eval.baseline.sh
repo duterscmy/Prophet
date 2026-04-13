@@ -24,4 +24,4 @@ accelerate launch eval_llada.py \
   --tasks humaneval \
   --confirm_run_unsafe_code --model llada_dist \
   --output_path evals_results/baseline/humaneval-ns0-length${length}-block${block} --log_samples \
-  --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',enable_early_exit=false,enable_soar=false,constraints_text="200:The|201:answer|202:is",gen_length=${length},steps=${length},block_length=${block},answer_length=5 &> logs/baseline-humaneval-ns0-${length}-${block}.log
+  --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',enable_early_exit=false,enable_soar=false,constraints_text="200:The|201:answer|202:is",gen_length=${length},steps=${length},block_length=${block},answer_length=5,torch_dtype=torch.bfloat16 &> logs/baseline-humaneval-ns0-${length}-${block}.log
