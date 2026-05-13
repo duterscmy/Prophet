@@ -828,10 +828,10 @@ def main():
         adaptive_min_block_size=2,
         adaptive_max_block_size=None,
 
-        adaptive_candidate_mode="dense"
-        adaptive_candidate_stride=1
-        adaptive_refine_candidates=False
-        
+        adaptive_candidate_mode="dense",
+        adaptive_candidate_stride=1,
+        adaptive_refine_candidates=False,
+
         # Coarse search:
         #   "power2": [2,4,8,16,32,64,128]
         #   "dense":  [2,3,4,...,128]
