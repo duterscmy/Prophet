@@ -245,7 +245,16 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained('GSAI-ML/LLaDA-8B-Instruct', trust_remote_code=True)
     
     prompt = "Lily can run 12 kilometers per hour for 4 hours. After that, she runs 6 kilometers per hour. How many kilometers can she run in 8 hours?"
-    
+    prompt = """from typing import List
+        def has_close_elements(numbers: List[float], threshold: float) -> bool:
+         Check if in given list of numbers, are any two numbers closer to each other than
+        given threshold.
+        >>> has_close_elements([1.0, 2.0, 3.0], 0.5)
+        False
+        >>> has_close_elements([1.0, 2.8, 3.0, 4.0, 5.0, 2.0], 0.3)
+        True
+"""
+
     m = [{"role": "user", "content": prompt}]
     prompt = tokenizer.apply_chat_template(m, add_generation_prompt=True, tokenize=False)
     
