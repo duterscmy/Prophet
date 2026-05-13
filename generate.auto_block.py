@@ -677,6 +677,7 @@ def main():
     adaptive_refine_candidates=False,
     adaptive_refine_stride=1,
     return_logs=True,
+    log=True,
 )
     print(tokenizer.batch_decode(out[:, input_ids.shape[1]:], skip_special_tokens=True)[0])
 
