@@ -864,7 +864,7 @@ def main():
         #   G(B)=mean(c_{B-w:B}) - mean(c_{B:B+w})
         # block mode:
         #   G(B)=mean(c_{0:B}) - mean(c_{B:2B})
-        gap_context_mode="window",  # change to "block" for full block comparison
+        gap_context_mode="block",  # change to "block" for full block comparison
         # gap_context_mode="block",
         use_gap_score=True,
         use_length_compensation=False,
