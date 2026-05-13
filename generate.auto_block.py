@@ -667,9 +667,7 @@ def main():
     input_ids = tokenizer(prompt)['input_ids']
     input_ids = torch.tensor(input_ids).to(device).unsqueeze(0)
     
-    out, logs = generate(
-    model,
-    prompt,
+    out, logs = generate(model,input_ids,
     gen_length=256,
     steps=256,
     adaptive_block_size=True,
