@@ -644,7 +644,7 @@ def generate(
     }
 
     if dump_json_logs:
-        print(json.dumps(log_payload, ensure_ascii=False))
+        # print(json.dumps(log_payload, ensure_ascii=False))
         print("num_unmask_records:", len(token_unmask_records))
         print("selected_block_sizes:", selected_Bs)
 
