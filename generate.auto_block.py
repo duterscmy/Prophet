@@ -1,7 +1,6 @@
 import torch
 import json
 import math
-import time
 import numpy as np
 import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel
@@ -27,6 +26,7 @@ def get_num_transfer_tokens(mask_index, steps):
         torch.zeros(mask_num.size(0), steps, device=mask_index.device, dtype=torch.int64)
         + base
     )
+
     for i in range(mask_num.size(0)):
         num_transfer_tokens[i, :remainder[i]] += 1
 
@@ -45,9 +45,7 @@ def _safe_decode_token(tokenizer, token_id):
 def _rank_values(values):
     """
     Larger value gets larger rank.
-    Example:
-        values = [0.2, 0.5, 0.1]
-        ranks  = [1,   2,   0]
+    Only used for logging/analysis.
     """
     arr = np.asarray(values, dtype=float)
     arr = np.where(np.isnan(arr), -np.inf, arr)
@@ -58,16 +56,33 @@ def _rank_values(values):
     return ranks
 
 
-def _build_power2_candidates(
+def _get_model_device(model):
+    try:
+        return next(model.parameters()).device
+    except StopIteration:
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def _build_block_candidates(
     remaining,
     gen_length,
     adaptive_min_block_size=2,
     adaptive_max_block_size=None,
+    adaptive_candidate_mode="power2",
+    adaptive_candidate_stride=1,
 ):
     """
+    Build candidate block sizes.
+
     Default:
       gen_length=256 -> max_block_size=128
+      adaptive_candidate_mode="power2"
       candidates=[2,4,8,16,32,64,128]
+
+    Dense mode:
+      adaptive_candidate_mode="dense"
+      adaptive_candidate_stride=1
+      candidates=[2,3,4,...,128]
     """
     if remaining <= 0:
         return []
@@ -81,137 +96,198 @@ def _build_power2_candidates(
     if remaining == 1:
         return [1]
 
-    candidates = []
-    b = 1
-    while b < min_b:
-        b *= 2
+    if adaptive_candidate_mode == "dense":
+        stride = max(1, int(adaptive_candidate_stride))
+        candidates = list(range(min_b, max_b + 1, stride))
+        if max_b not in candidates:
+            candidates.append(max_b)
 
-    while b <= max_b:
-        candidates.append(b)
-        b *= 2
+    elif adaptive_candidate_mode == "power2":
+        candidates = []
+        b = 1
+        while b < min_b:
+            b *= 2
 
-    if not candidates:
-        candidates = [max_b]
+        while b <= max_b:
+            candidates.append(b)
+            b *= 2
 
-    # If remaining is smaller than min_b, allow remaining.
+        if not candidates:
+            candidates = [max_b]
+
+    else:
+        raise ValueError(
+            f"Unknown adaptive_candidate_mode={adaptive_candidate_mode}. "
+            f"Use 'power2' or 'dense'."
+        )
+
     if remaining < adaptive_min_block_size and remaining not in candidates:
         candidates = [remaining]
 
-    return sorted(set(int(x) for x in candidates if x >= 1 and x <= remaining))
+    return sorted(set(int(x) for x in candidates if 1 <= x <= remaining))
+
+
+def _argmax_score_with_large_B_tiebreak(rows):
+    """
+    Select row with largest total_score.
+    If tie, prefer larger B.
+    """
+    scores = np.asarray([r["total_score"] for r in rows], dtype=float)
+    max_score = np.max(scores)
+
+    candidate_indices = [
+        i for i, s in enumerate(scores)
+        if np.isclose(s, max_score, rtol=1e-8, atol=1e-12)
+    ]
+
+    best_idx = max(candidate_indices, key=lambda idx: rows[idx]["B"])
+    return best_idx
 
 
 def _compute_block_scores(
     conf,
     candidates,
-    use_r_int_score=True,
-    use_u_post_score=True,
-    use_efficiency_score=True,
+    use_gap_score=True,
+    use_length_compensation=True,
+    positive_gap_only=True,
+    gap_window_size=None,
 ):
     """
-    Scores:
-      R_int(B)  = median(c_1:B) - LCM(B)
-      LCM(B)    = mean(max(0, median(c_1:M) - c_i)), i in 1:B
-      U_post(B) = -mean(c_{B+1:B+w})
-      E(B)      = log(B)
+    Simple window-gap adaptive block score.
 
-    Final:
-      S(B) = rank(R_int) + rank(U_post) + rank(logB)
+    For each candidate B:
+        w = sqrt(B) by default.
+
+        tail_mean(B) = mean(c_{B-w:B})
+        post_mean(B) = mean(c_{B:B+w})
+        gap(B)       = tail_mean(B) - post_mean(B)
+
+    Default final score:
+        S(B) = max(0, gap(B)) * log(B)
+
+    Motivation:
+      - tail_mean checks whether the end of the candidate block is relatively stable.
+      - post_mean checks whether the region after the boundary is less stable.
+      - gap > 0 means the candidate boundary separates a more confident tail
+        from a less confident following region.
+      - log(B) is only a length compensation, not an independent voting term.
     """
     conf = np.asarray(conf, dtype=float)
-    median_probe = float(np.median(conf)) if len(conf) > 0 else 0.0
 
     rows = []
-    valid_candidates = []
 
     for B in candidates:
         B = int(B)
         if B < 1 or B > len(conf):
             continue
 
-        block_conf = conf[:B]
-        w = max(2, int(math.sqrt(B)))
+        if gap_window_size is None:
+            w = max(2, int(math.sqrt(B)))
+        else:
+            w = max(1, int(gap_window_size))
 
+        tail_start = max(0, B - w)
+        tail_end = B
         post_start = B
         post_end = min(len(conf), B + w)
+
+        tail_conf = conf[tail_start:tail_end]
         post_conf = conf[post_start:post_end]
 
-        block_median = float(np.median(block_conf))
-        block_mean = float(np.mean(block_conf))
-        block_min = float(np.min(block_conf))
-        block_std = float(np.std(block_conf))
+        if len(tail_conf) == 0:
+            continue
 
-        lcm_values = np.maximum(0.0, median_probe - block_conf)
-        lcm = float(np.mean(lcm_values))
-
-        r_int = block_median - lcm
+        tail_mean = float(np.mean(tail_conf))
+        tail_median = float(np.median(tail_conf))
+        tail_min = float(np.min(tail_conf))
+        tail_max = float(np.max(tail_conf))
 
         if len(post_conf) > 0:
             post_mean = float(np.mean(post_conf))
-            u_post = -post_mean
+            post_median = float(np.median(post_conf))
+            post_min = float(np.min(post_conf))
+            post_max = float(np.max(post_conf))
+            no_post_region = False
         else:
-            post_mean = None
-            # No future region means no need to delay; neutral-to-favorable.
-            u_post = 0.0
+            # If there is no future region, this candidate reaches the end.
+            # Treat post confidence as 0 so finishing can be selected.
+            post_mean = 0.0
+            post_median = None
+            post_min = None
+            post_max = None
+            no_post_region = True
 
-        efficiency = float(np.log(B))
+        gap = tail_mean - post_mean
 
-        valid_candidates.append(B)
+        if positive_gap_only:
+            gap_for_score = max(0.0, gap)
+        else:
+            gap_for_score = gap
+
+        length_bonus = float(np.log(B))
+
+        if use_gap_score and use_length_compensation:
+            total_score = gap_for_score * length_bonus
+        elif use_gap_score:
+            total_score = gap_for_score
+        elif use_length_compensation:
+            total_score = length_bonus
+        else:
+            # If both are disabled, fall back to largest block through tie-break.
+            total_score = 0.0
+
         rows.append({
             "B": B,
             "w": w,
-            "median_probe": median_probe,
-            "block_median": block_median,
-            "block_mean": block_mean,
-            "block_min": block_min,
-            "block_std": block_std,
-            "LCM": lcm,
-            "R_int": float(r_int),
-            "post_start_offset": post_start,
-            "post_end_offset": post_end,
+
+            "tail_start_offset": int(tail_start),
+            "tail_end_offset": int(tail_end),
+            "post_start_offset": int(post_start),
+            "post_end_offset": int(post_end),
+
+            "tail_mean": tail_mean,
+            "tail_median": tail_median,
+            "tail_min": tail_min,
+            "tail_max": tail_max,
+
             "post_mean": post_mean,
-            "U_post": float(u_post),
-            "efficiency_logB": efficiency,
+            "post_median": post_median,
+            "post_min": post_min,
+            "post_max": post_max,
+            "no_post_region": bool(no_post_region),
+
+            "gap_tail_minus_post": float(gap),
+            "gap_for_score": float(gap_for_score),
+            "length_bonus_logB": length_bonus,
+            "total_score": float(total_score),
         })
 
     if not rows:
         return None
 
-    r_int_values = [r["R_int"] for r in rows]
-    u_post_values = [r["U_post"] for r in rows]
-    eff_values = [r["efficiency_logB"] for r in rows]
+    gap_values = [r["gap_tail_minus_post"] for r in rows]
+    gap_for_score_values = [r["gap_for_score"] for r in rows]
+    length_values = [r["length_bonus_logB"] for r in rows]
+    total_values = [r["total_score"] for r in rows]
 
-    total = np.zeros(len(rows), dtype=float)
+    gap_rank = _rank_values(gap_values)
+    gap_for_score_rank = _rank_values(gap_for_score_values)
+    length_rank = _rank_values(length_values)
+    total_rank = _rank_values(total_values)
 
-    if use_r_int_score:
-        r_rank = _rank_values(r_int_values)
-        total += r_rank
+    for idx, row in enumerate(rows):
+        row["rank_gap"] = float(gap_rank[idx])
+        row["rank_gap_for_score"] = float(gap_for_score_rank[idx])
+        row["rank_length"] = float(length_rank[idx])
+        row["rank_total"] = float(total_rank[idx])
+
+    # If all scores are zero, there is no clear positive gap.
+    # Prefer the largest candidate for efficiency.
+    if max(r["total_score"] for r in rows) <= 0:
+        best_idx = max(range(len(rows)), key=lambda idx: rows[idx]["B"])
     else:
-        r_rank = np.zeros(len(rows), dtype=float)
+        best_idx = _argmax_score_with_large_B_tiebreak(rows)
 
-    if use_u_post_score:
-        u_rank = _rank_values(u_post_values)
-        total += u_rank
-    else:
-        u_rank = np.zeros(len(rows), dtype=float)
-
-    if use_efficiency_score:
-        e_rank = _rank_values(eff_values)
-        total += e_rank
-    else:
-        e_rank = np.zeros(len(rows), dtype=float)
-
-    # Fallback: if all score terms are disabled, choose the largest block.
-    if not (use_r_int_score or use_u_post_score or use_efficiency_score):
-        e_rank = _rank_values(eff_values)
-        total = e_rank
-
-    for idx, r in enumerate(rows):
-        r["rank_R_int"] = float(r_rank[idx])
-        r["rank_U_post"] = float(u_rank[idx])
-        r["rank_efficiency"] = float(e_rank[idx])
-        r["total_score"] = float(total[idx])
-
-    best_idx = int(np.argmax(total))
     return {
         "selected_B": int(rows[best_idx]["B"]),
         "candidate_rows": rows,
@@ -222,23 +298,29 @@ def _compute_block_scores(
 def _choose_adaptive_block_size(
     conf,
     coarse_candidates,
-    use_r_int_score=True,
-    use_u_post_score=True,
-    use_efficiency_score=True,
+    use_gap_score=True,
+    use_length_compensation=True,
+    positive_gap_only=True,
+    gap_window_size=None,
     adaptive_refine_candidates=False,
     adaptive_refine_stride=1,
 ):
     """
-    First score power-of-two candidates.
+    First score coarse candidates.
+
     Optional refinement:
-      If coarse best is 16 and its best neighbor is 32, search every integer in [16,32].
+      If coarse best is 16 and its strongest neighbor is 32,
+      search every integer in [16,32].
+
+    This supports fine-grained search while keeping the default candidate set simple.
     """
     coarse_result = _compute_block_scores(
         conf=conf,
         candidates=coarse_candidates,
-        use_r_int_score=use_r_int_score,
-        use_u_post_score=use_u_post_score,
-        use_efficiency_score=use_efficiency_score,
+        use_gap_score=use_gap_score,
+        use_length_compensation=use_length_compensation,
+        positive_gap_only=positive_gap_only,
+        gap_window_size=gap_window_size,
     )
 
     if coarse_result is None:
@@ -262,22 +344,34 @@ def _choose_adaptive_block_size(
             neighbor_indices.append(best_idx + 1)
 
         if neighbor_indices:
-            neighbor_idx = max(neighbor_indices, key=lambda idx: coarse_scores[idx])
+            # Pick the higher-scoring neighbor.
+            neighbor_idx = max(
+                neighbor_indices,
+                key=lambda idx: (coarse_scores[idx], coarse_Bs[idx])
+            )
             neighbor_B = coarse_Bs[neighbor_idx]
 
             low = min(best_B, neighbor_B)
             high = max(best_B, neighbor_B)
 
             if high > low:
-                refined_candidates = list(range(low, high + 1, adaptive_refine_stride))
-                refined_candidates = [b for b in refined_candidates if b >= 1 and b <= len(conf)]
+                stride = max(1, int(adaptive_refine_stride))
+                refined_candidates = list(range(low, high + 1, stride))
+                if high not in refined_candidates:
+                    refined_candidates.append(high)
+
+                refined_candidates = [
+                    b for b in refined_candidates
+                    if 1 <= b <= len(conf)
+                ]
 
                 refined_result = _compute_block_scores(
                     conf=conf,
                     candidates=refined_candidates,
-                    use_r_int_score=use_r_int_score,
-                    use_u_post_score=use_u_post_score,
-                    use_efficiency_score=use_efficiency_score,
+                    use_gap_score=use_gap_score,
+                    use_length_compensation=use_length_compensation,
+                    positive_gap_only=positive_gap_only,
+                    gap_window_size=gap_window_size,
                 )
 
                 if refined_result is not None:
@@ -287,7 +381,9 @@ def _choose_adaptive_block_size(
                         "coarse_best_B": int(best_B),
                         "neighbor_B": int(neighbor_B),
                         "refine_range": [int(low), int(high)],
-                        "refine_stride": int(adaptive_refine_stride),
+                        "refine_stride": int(stride),
+                        "refined_candidates": [int(b) for b in refined_candidates],
+                        "refined_selected_B": int(refined_result["selected_B"]),
                     }
 
     return {
@@ -318,47 +414,51 @@ def generate(
     adaptive_block_size=True,
     adaptive_min_block_size=2,
     adaptive_max_block_size=None,
+    adaptive_candidate_mode="power2",   # "power2" or "dense"
+    adaptive_candidate_stride=1,
+
+    # Fine-grained refinement
     adaptive_refine_candidates=False,
     adaptive_refine_stride=1,
 
-    # Ablation switches for the three score terms
-    use_r_int_score=True,
-    use_u_post_score=True,
-    use_efficiency_score=True,
+    # Window-gap score options
+    use_gap_score=True,
+    use_length_compensation=True,
+    positive_gap_only=True,
+    gap_window_size=None,
 
     # Logging options
     log_all_probe_positions=True,
-    dump_json_logs=True,
+    print_probe_positions=False,
+    dump_json_logs=False,
     return_logs=False,
 ):
     """
     Adaptive block diffusion generation.
 
     Main adaptive score:
-        B_t = argmax_B [
-            rank(R_int(B)) + rank(U_post(B)) + rank(log B)
-        ]
+        G(B) = mean(c_{B-w:B}) - mean(c_{B:B+w})
 
-    where:
-        R_int(B)  = median(c_1:B) - LCM(B)
-        LCM(B)    = mean(max(0, median(c_1:M) - c_i)), i in 1:B
-        U_post(B) = -mean(c_{B+1:B+w})
-        E(B)      = log B
+    Default:
+        S(B) = max(0, G(B)) * log(B)
 
-    Args:
-        use_r_int_score:
-            Whether to use interior reliability score.
-        use_u_post_score:
-            Whether to use post-boundary uncertainty score.
-        use_efficiency_score:
-            Whether to use efficiency score log(B).
-        adaptive_refine_candidates:
-            If True, first select among powers of two, then refine between the best
-            coarse block size and its best neighboring coarse block size.
+    Candidate block sizes:
+        Default power-of-two:
+            gen_length=256 -> [2,4,8,16,32,64,128]
+
+        Dense:
+            adaptive_candidate_mode="dense"
+            adaptive_candidate_stride=1
+            gen_length=256 -> [2,3,4,...,128]
+
+    Fine search:
+        adaptive_refine_candidates=True
+        first scores coarse candidates, then searches between the best coarse B
+        and its strongest neighboring coarse B.
     """
     print("======adaptive block generation, temperature: {:.1f}====".format(temperature))
 
-    device = model.device
+    device = _get_model_device(model)
     prompt_len = prompt.shape[1]
 
     x = torch.full(
@@ -380,6 +480,7 @@ def generate(
 
     block_selection_records = []
     token_unmask_records = []
+
     summary_records = {
         "gen_length": int(gen_length),
         "total_steps_budget": int(steps),
@@ -390,11 +491,15 @@ def generate(
             if adaptive_max_block_size is not None
             else int(max(1, gen_length // 2))
         ),
+        "adaptive_candidate_mode": adaptive_candidate_mode,
+        "adaptive_candidate_stride": int(adaptive_candidate_stride),
         "adaptive_refine_candidates": bool(adaptive_refine_candidates),
+        "adaptive_refine_stride": int(adaptive_refine_stride),
         "score_terms": {
-            "use_r_int_score": bool(use_r_int_score),
-            "use_u_post_score": bool(use_u_post_score),
-            "use_efficiency_score": bool(use_efficiency_score),
+            "use_gap_score": bool(use_gap_score),
+            "use_length_compensation": bool(use_length_compensation),
+            "positive_gap_only": bool(positive_gap_only),
+            "gap_window_size": gap_window_size,
         },
         "selected_block_sizes": [],
         "block_step_counts": [],
@@ -452,19 +557,22 @@ def generate(
             future_conf = future_conf_tensor.detach().float().cpu().numpy()
             future_token = future_token_tensor.detach().long().cpu().numpy()
 
-            coarse_candidates = _build_power2_candidates(
+            coarse_candidates = _build_block_candidates(
                 remaining=remaining,
                 gen_length=gen_length,
                 adaptive_min_block_size=adaptive_min_block_size,
                 adaptive_max_block_size=adaptive_max_block_size,
+                adaptive_candidate_mode=adaptive_candidate_mode,
+                adaptive_candidate_stride=adaptive_candidate_stride,
             )
 
             choice = _choose_adaptive_block_size(
                 conf=future_conf,
                 coarse_candidates=coarse_candidates,
-                use_r_int_score=use_r_int_score,
-                use_u_post_score=use_u_post_score,
-                use_efficiency_score=use_efficiency_score,
+                use_gap_score=use_gap_score,
+                use_length_compensation=use_length_compensation,
+                positive_gap_only=positive_gap_only,
+                gap_window_size=gap_window_size,
                 adaptive_refine_candidates=adaptive_refine_candidates,
                 adaptive_refine_stride=adaptive_refine_stride,
             )
@@ -523,11 +631,29 @@ def generate(
             print(f"block_id={block_id}")
             print(f"cursor={cursor}, remaining={remaining}")
             print(f"selected_block_size={selected_block_size}")
+
             if adaptive_block_size and block_selection_record["choice"] is not None:
                 print("coarse candidates:", block_selection_record["coarse_candidates"])
-                print("final candidate rows:")
-                for row in block_selection_record["choice"]["final_result"]["candidate_rows"]:
+
+                print("\ncoarse candidate rows:")
+                for row in block_selection_record["choice"]["coarse_result"]["candidate_rows"]:
                     print(row)
+
+                if block_selection_record["choice"]["refine_info"] is not None:
+                    print("\nrefine info:")
+                    print(block_selection_record["choice"]["refine_info"])
+
+                    print("\nrefined candidate rows:")
+                    for row in block_selection_record["choice"]["final_result"]["candidate_rows"]:
+                        print(row)
+
+                print("\nselected row:")
+                print(block_selection_record["choice"]["final_result"]["selected_row"])
+
+            if print_probe_positions and log_all_probe_positions:
+                print("\nprobe positions:")
+                for item in probe_position_records:
+                    print(item)
 
         # =========================================================
         # 2. Decode selected block
@@ -544,7 +670,10 @@ def generate(
 
         # Distribute the global step budget proportionally to selected block size.
         # If steps == gen_length, this gives roughly one unmasking step per token.
-        block_steps = max(1, int(round(float(steps) * selected_block_size / float(gen_length))))
+        block_steps = max(
+            1,
+            int(round(float(steps) * selected_block_size / float(gen_length)))
+        )
         block_steps = min(block_steps, num_mask_in_block)
 
         summary_records["selected_block_sizes"].append(int(selected_block_size))
@@ -644,7 +773,8 @@ def generate(
     }
 
     if dump_json_logs:
-        # print(json.dumps(log_payload, ensure_ascii=False))
+        print(json.dumps(log_payload, ensure_ascii=False))
+    else:
         print("num_unmask_records:", len(token_unmask_records))
         print("selected_block_sizes:", selected_Bs)
 
@@ -653,34 +783,94 @@ def generate(
 
     return x
 
+
 def main():
-    device = 'cuda'
-    
-    model = AutoModel.from_pretrained('/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct', trust_remote_code=True, torch_dtype=torch.bfloat16).to(device).eval()
-    tokenizer = AutoTokenizer.from_pretrained('/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct', trust_remote_code=True)
-    
-    prompt = "Lily can run 12 kilometers per hour for 4 hours. After that, she runs 6 kilometers per hour. How many kilometers can she run in 8 hours?"
-    
+    device = "cuda"
+
+    model_path = "/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct"
+
+    model = AutoModel.from_pretrained(
+        model_path,
+        trust_remote_code=True,
+        torch_dtype=torch.bfloat16,
+    ).to(device).eval()
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_path,
+        trust_remote_code=True,
+    )
+
+    prompt = (
+        "Lily can run 12 kilometers per hour for 4 hours. "
+        "After that, she runs 6 kilometers per hour. "
+        "How many kilometers can she run in 8 hours?"
+    )
+
     m = [{"role": "user", "content": prompt}]
-    prompt = tokenizer.apply_chat_template(m, add_generation_prompt=True, tokenize=False)
-    
-    input_ids = tokenizer(prompt)['input_ids']
+    prompt = tokenizer.apply_chat_template(
+        m,
+        add_generation_prompt=True,
+        tokenize=False,
+    )
+
+    input_ids = tokenizer(prompt)["input_ids"]
     input_ids = torch.tensor(input_ids).to(device).unsqueeze(0)
-    
-    out, logs = generate(model,input_ids,
-    gen_length=256,
-    steps=256,
-    adaptive_block_size=True,
-    use_r_int_score=True,
-    use_u_post_score=True,
-    use_efficiency_score=True,
-    adaptive_refine_candidates=False,
-    adaptive_refine_stride=1,
-    return_logs=True,
-    log=True,
-)
-    print(tokenizer.batch_decode(out[:, input_ids.shape[1]:], skip_special_tokens=True)[0])
+
+    out, logs = generate(
+        model,
+        input_ids,
+        gen_length=256,
+        steps=256,
+        temperature=0.,
+        adaptive_block_size=True,
+
+        # Candidate setting.
+        adaptive_min_block_size=2,
+        adaptive_max_block_size=None,
+
+        adaptive_candidate_mode="dense"
+        adaptive_candidate_stride=1
+        adaptive_refine_candidates=False
+        
+        # Coarse search:
+        #   "power2": [2,4,8,16,32,64,128]
+        #   "dense":  [2,3,4,...,128]
+        # adaptive_candidate_mode="power2",
+        # adaptive_candidate_stride=1,
+
+        # # Fine-grained refinement.
+        # # If True, after coarse search, search between best coarse B and best neighbor.
+        # adaptive_refine_candidates=True,
+        # adaptive_refine_stride=1,
+
+        # Score:
+        #   default S(B)=max(0, gap)*log(B)
+        use_gap_score=True,
+        use_length_compensation=True,
+        positive_gap_only=True,
+        gap_window_size=None,
+
+        tokenizer=tokenizer,
+        return_logs=True,
+        log=True,
+
+        # If True, logs every future probe position into returned logs.
+        log_all_probe_positions=True,
+
+        # If True, also prints every probe position to stdout. This can be very verbose.
+        print_probe_positions=False,
+
+        # If True, dumps the full JSON logs to stdout.
+        dump_json_logs=False,
+    )
+
+    print(
+        tokenizer.batch_decode(
+            out[:, input_ids.shape[1]:],
+            skip_special_tokens=True,
+        )[0]
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
