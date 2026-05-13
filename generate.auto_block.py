@@ -151,28 +151,32 @@ def _compute_block_scores(
     use_length_compensation=True,
     positive_gap_only=True,
     gap_window_size=None,
+    gap_context_mode="window",  # "window" or "block"
 ):
     """
-    Simple window-gap adaptive block score.
+    Adaptive block score.
 
-    For each candidate B:
+    gap_context_mode="window":
         w = sqrt(B) by default.
-
         tail_mean(B) = mean(c_{B-w:B})
         post_mean(B) = mean(c_{B:B+w})
         gap(B)       = tail_mean(B) - post_mean(B)
 
+    gap_context_mode="block":
+        tail_mean(B) = mean(c_{0:B})
+        post_mean(B) = mean(c_{B:2B})
+        gap(B)       = tail_mean(B) - post_mean(B)
+
     Default final score:
         S(B) = max(0, gap(B)) * log(B)
-
-    Motivation:
-      - tail_mean checks whether the end of the candidate block is relatively stable.
-      - post_mean checks whether the region after the boundary is less stable.
-      - gap > 0 means the candidate boundary separates a more confident tail
-        from a less confident following region.
-      - log(B) is only a length compensation, not an independent voting term.
     """
     conf = np.asarray(conf, dtype=float)
+
+    if gap_context_mode not in ["window", "block"]:
+        raise ValueError(
+            f"Unknown gap_context_mode={gap_context_mode}. "
+            f"Use 'window' or 'block'."
+        )
 
     rows = []
 
@@ -181,15 +185,24 @@ def _compute_block_scores(
         if B < 1 or B > len(conf):
             continue
 
-        if gap_window_size is None:
-            w = max(2, int(math.sqrt(B)))
-        else:
-            w = max(1, int(gap_window_size))
+        if gap_context_mode == "window":
+            if gap_window_size is None:
+                w = max(2, int(math.sqrt(B)))
+            else:
+                w = max(1, int(gap_window_size))
 
-        tail_start = max(0, B - w)
-        tail_end = B
-        post_start = B
-        post_end = min(len(conf), B + w)
+            tail_start = max(0, B - w)
+            tail_end = B
+            post_start = B
+            post_end = min(len(conf), B + w)
+
+        else:
+            # Compare the entire candidate block with the next same-length region.
+            w = B
+            tail_start = 0
+            tail_end = B
+            post_start = B
+            post_end = min(len(conf), 2 * B)
 
         tail_conf = conf[tail_start:tail_end]
         post_conf = conf[post_start:post_end]
@@ -239,6 +252,7 @@ def _compute_block_scores(
         rows.append({
             "B": B,
             "w": w,
+            "gap_context_mode": gap_context_mode,
 
             "tail_start_offset": int(tail_start),
             "tail_end_offset": int(tail_end),
@@ -302,6 +316,7 @@ def _choose_adaptive_block_size(
     use_length_compensation=True,
     positive_gap_only=True,
     gap_window_size=None,
+    gap_context_mode="window",
     adaptive_refine_candidates=False,
     adaptive_refine_stride=1,
 ):
@@ -311,8 +326,6 @@ def _choose_adaptive_block_size(
     Optional refinement:
       If coarse best is 16 and its strongest neighbor is 32,
       search every integer in [16,32].
-
-    This supports fine-grained search while keeping the default candidate set simple.
     """
     coarse_result = _compute_block_scores(
         conf=conf,
@@ -321,6 +334,7 @@ def _choose_adaptive_block_size(
         use_length_compensation=use_length_compensation,
         positive_gap_only=positive_gap_only,
         gap_window_size=gap_window_size,
+        gap_context_mode=gap_context_mode,
     )
 
     if coarse_result is None:
@@ -372,6 +386,7 @@ def _choose_adaptive_block_size(
                     use_length_compensation=use_length_compensation,
                     positive_gap_only=positive_gap_only,
                     gap_window_size=gap_window_size,
+                    gap_context_mode=gap_context_mode,
                 )
 
                 if refined_result is not None:
@@ -421,11 +436,12 @@ def generate(
     adaptive_refine_candidates=False,
     adaptive_refine_stride=1,
 
-    # Window-gap score options
+    # Window/block gap score options
     use_gap_score=True,
     use_length_compensation=True,
     positive_gap_only=True,
     gap_window_size=None,
+    gap_context_mode="window",  # "window" or "block"
 
     # Logging options
     log_all_probe_positions=True,
@@ -436,8 +452,11 @@ def generate(
     """
     Adaptive block diffusion generation.
 
-    Main adaptive score:
+    gap_context_mode="window":
         G(B) = mean(c_{B-w:B}) - mean(c_{B:B+w})
+
+    gap_context_mode="block":
+        G(B) = mean(c_{0:B}) - mean(c_{B:2B})
 
     Default:
         S(B) = max(0, G(B)) * log(B)
@@ -450,11 +469,6 @@ def generate(
             adaptive_candidate_mode="dense"
             adaptive_candidate_stride=1
             gen_length=256 -> [2,3,4,...,128]
-
-    Fine search:
-        adaptive_refine_candidates=True
-        first scores coarse candidates, then searches between the best coarse B
-        and its strongest neighboring coarse B.
     """
     print("======adaptive block generation, temperature: {:.1f}====".format(temperature))
 
@@ -500,6 +514,7 @@ def generate(
             "use_length_compensation": bool(use_length_compensation),
             "positive_gap_only": bool(positive_gap_only),
             "gap_window_size": gap_window_size,
+            "gap_context_mode": gap_context_mode,
         },
         "selected_block_sizes": [],
         "block_step_counts": [],
@@ -573,6 +588,7 @@ def generate(
                 use_length_compensation=use_length_compensation,
                 positive_gap_only=positive_gap_only,
                 gap_window_size=gap_window_size,
+                gap_context_mode=gap_context_mode,
                 adaptive_refine_candidates=adaptive_refine_candidates,
                 adaptive_refine_stride=adaptive_refine_stride,
             )
@@ -631,6 +647,7 @@ def generate(
             print(f"block_id={block_id}")
             print(f"cursor={cursor}, remaining={remaining}")
             print(f"selected_block_size={selected_block_size}")
+            print(f"gap_context_mode={gap_context_mode}")
 
             if adaptive_block_size and block_selection_record["choice"] is not None:
                 print("coarse candidates:", block_selection_record["coarse_candidates"])
@@ -800,11 +817,16 @@ def main():
         trust_remote_code=True,
     )
 
-    prompt = (
-        "Lily can run 12 kilometers per hour for 4 hours. "
-        "After that, she runs 6 kilometers per hour. "
-        "How many kilometers can she run in 8 hours?"
-    )
+    prompt = "Lily can run 12 kilometers per hour for 4 hours. After that, she runs 6 kilometers per hour. How many kilometers can she run in 8 hours?"
+    prompt = """from typing import List
+        def has_close_elements(numbers: List[float], threshold: float) -> bool:
+         Check if in given list of numbers, are any two numbers closer to each other than
+        given threshold.
+        >>> has_close_elements([1.0, 2.0, 3.0], 0.5)
+        False
+        >>> has_close_elements([1.0, 2.8, 3.0, 4.0, 5.0, 2.0], 0.3)
+        True
+"""
 
     m = [{"role": "user", "content": prompt}]
     prompt = tokenizer.apply_chat_template(
@@ -828,39 +850,32 @@ def main():
         adaptive_min_block_size=2,
         adaptive_max_block_size=None,
 
+        # "power2": [2,4,8,16,32,64,128]
+        # "dense":  [2,3,4,...,128]
         adaptive_candidate_mode="dense",
         adaptive_candidate_stride=1,
+
+        # Fine-grained refinement.
         adaptive_refine_candidates=False,
-
-        # Coarse search:
-        #   "power2": [2,4,8,16,32,64,128]
-        #   "dense":  [2,3,4,...,128]
-        # adaptive_candidate_mode="power2",
-        # adaptive_candidate_stride=1,
-
-        # # Fine-grained refinement.
-        # # If True, after coarse search, search between best coarse B and best neighbor.
-        # adaptive_refine_candidates=True,
-        # adaptive_refine_stride=1,
+        adaptive_refine_stride=1,
 
         # Score:
-        #   default S(B)=max(0, gap)*log(B)
+        # window mode:
+        #   G(B)=mean(c_{B-w:B}) - mean(c_{B:B+w})
+        # block mode:
+        #   G(B)=mean(c_{0:B}) - mean(c_{B:2B})
+        gap_context_mode="window",  # change to "block" for full block comparison
+        # gap_context_mode="block",
         use_gap_score=True,
-        use_length_compensation=True,
+        use_length_compensation=False,
         positive_gap_only=True,
         gap_window_size=None,
 
         tokenizer=tokenizer,
         return_logs=True,
         log=True,
-
-        # If True, logs every future probe position into returned logs.
         log_all_probe_positions=True,
-
-        # If True, also prints every probe position to stdout. This can be very verbose.
         print_probe_positions=False,
-
-        # If True, dumps the full JSON logs to stdout.
         dump_json_logs=False,
     )
 
