@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name="autoblock_eval"
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
-#SBATCH --gres=gpu:4
-#SBATCH --time=3:00:00
+#SBATCH --ntasks-per-node=1
+#SBATCH --gres=gpu:1
+#SBATCH --time=4:00:00
 #SBATCH -o slurm.%j.%N.out
 #SBATCH -e slurm.%j.%N.err
 
@@ -19,7 +19,7 @@ length=256
 mkdir -p evals_results/autoblock
 mkdir -p logs
 
-accelerate launch --num_processes 4 eval_llada.auto_block.py \
+accelerate launch --num_processes 1 eval_llada.auto_block.py \
   --tasks gsm8k_cot_zeroshot \
   --model llada_dist \
   --output_path evals_results/autoblock/gsm8k-length${length}-dense-gapblock \
