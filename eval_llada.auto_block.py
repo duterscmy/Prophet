@@ -15,7 +15,7 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
 
 # If your file is generate/auto_block.py
-from generate.auto_block import generate as generate_auto_block
+from generate_auto_block import generate as generate_auto_block
 
 # If your file is generate_auto_block.py instead, use:
 # from generate_auto_block import generate as generate_auto_block
