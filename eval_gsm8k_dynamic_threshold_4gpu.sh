@@ -21,7 +21,7 @@ length=256
 block=32
 max_threshold=0.95
 min_threshold=0.05
-default_threshold=0.5
+default_threshold=0.95
 
 threshold_json="token_threshold_stats/token_threshold_p50.json"
 
