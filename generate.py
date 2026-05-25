@@ -970,7 +970,7 @@ def main():
     input_ids = torch.tensor(input_ids).to(device).unsqueeze(0)
     
     # out = generate_adaptive_parallel(model, input_ids, steps=128, gen_length=128, block_length=32, temperature=0., cfg_scale=0., remasking='low_confidence')
-    with open("token_threshold_stats/token_threshold_p50.json", "r") as f:
+    with open("token_threshold_stats/token_threshold_p25.json", "r") as f:
         raw = json.load(f)
 
     threshold_dict = {int(k): float(v) for k, v in raw.items()}
