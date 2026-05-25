@@ -955,6 +955,7 @@ def generate_token_threshold_parallel(
 
 
 def main():
+    import json
     device = 'cuda'
     
     model = AutoModel.from_pretrained("/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct", trust_remote_code=True, torch_dtype=torch.bfloat16).to(device).eval()
@@ -968,8 +969,20 @@ def main():
     input_ids = tokenizer(prompt)['input_ids']
     input_ids = torch.tensor(input_ids).to(device).unsqueeze(0)
     
-    out = generate_adaptive_parallel(model, input_ids, steps=128, gen_length=128, block_length=32, temperature=0., cfg_scale=0., remasking='low_confidence')
-    # out = generate_token_threshold_parallel(model, input_ids, steps=128, gen_length=128, block_length=32, temperature=0., cfg_scale=0., remasking='low_confidence')
+    # out = generate_adaptive_parallel(model, input_ids, steps=128, gen_length=128, block_length=32, temperature=0., cfg_scale=0., remasking='low_confidence')
+    with open("/Users/mc03002/Documents/Prophet/token_threshold_stats/token_threshold_p50.json", "r") as f:
+        raw = json.load(f)
+
+    threshold_dict = {int(k): float(v) for k, v in raw.items()}
+
+    out = generate_token_threshold_parallel(
+        model,
+        input_ids,
+        threshold_dict=threshold_dict,
+        steps=128,
+        gen_length=128,
+        block_length=32,
+    )
     print(tokenizer.batch_decode(out[:, input_ids.shape[1]:], skip_special_tokens=True)[0])
 
 
