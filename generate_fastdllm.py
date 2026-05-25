@@ -429,7 +429,6 @@ def generate_with_prefix_cache_with_soar(model, prompt, steps=128, gen_length=12
     return best_sequence, nfe
 
 
-
 @torch.no_grad()
 def generate_with_dual_cache(
     model, prompt, steps=128, gen_length=128, block_length=128, temperature=0.,
