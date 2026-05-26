@@ -23,12 +23,12 @@ max_threshold=0.95
 min_threshold=0.05
 default_threshold=0.95
 
-threshold_json="token_threshold_stats/token_threshold_p15.json"
+threshold_json="token_threshold_stats/token_threshold_p05.json"
 
 accelerate launch --num_processes 4 eval_llada.auto_thresh.py \
   --tasks gsm8k_cot_zeroshot \
   --model llada_dist \
-  --output_path evals_results/auto_thresh/gsm8k_dynamic_p15_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold} \
+  --output_path evals_results/auto_thresh/gsm8k_dynamic_p05_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold} \
   --log_samples \
   --model_args model_path='/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=${block},use_dynamic_threshold=true,dynamic_threshold_json=${threshold_json},max_threshold=${max_threshold},min_threshold=${min_threshold},default_threshold=${default_threshold},min_parallel_tokens=1 \
-  &> logs/gsm8k_dynamic_p15_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold}.log
+  &> logs/gsm8k_dynamic_p05_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold}.log
