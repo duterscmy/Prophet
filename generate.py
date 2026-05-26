@@ -290,6 +290,247 @@ def generate(model, prompt, steps=128, gen_length=128, block_length=128, tempera
     return x
 
 
+def generate_full_confidence(model, prompt, steps=128, gen_length=128, block_length=128, temperature=0.,
+             cfg_scale=0., remasking='low_confidence', mask_id=126336,
+             constraints=None, log=False, logits_eos_inf=False,
+             confidence_eos_eot_inf=False,
+             print_all_token_records=True):
+    '''
+    Args:
+        model: Mask predictor.
+        prompt: A tensor of shape (1, L).
+        steps: Sampling steps, less than or equal to gen_length.
+        gen_length: Generated answer length.
+        block_length: Block length, less than or equal to gen_length.
+        temperature: Categorical distribution sampling temperature.
+        cfg_scale: Unsupervised classifier-free guidance scale.
+        remasking: Remasking strategy. 'low_confidence' or 'random'.
+        mask_id: The token id of [MASK] is 126336.
+        print_all_token_records:
+            If True, print a JSON object containing both selected records
+            and all candidate token confidence traces.
+    '''
+    import json
+
+    print("======greedy, temperature: {:.1f}====".format(temperature))
+
+    x = torch.full(
+        (1, prompt.shape[1] + gen_length),
+        mask_id,
+        dtype=torch.long
+    ).to(model.device)
+
+    x[:, :prompt.shape[1]] = prompt.clone()
+
+    # Apply constraints
+    if constraints is not None:
+        for pos, token_id in constraints.items():
+            absolute_pos = prompt.shape[1] + pos
+            if absolute_pos < x.shape[1]:
+                x[:, absolute_pos] = token_id
+
+    prompt_index = (x != mask_id)
+
+    assert gen_length % block_length == 0
+    num_blocks = gen_length // block_length
+
+    assert steps % num_blocks == 0
+    steps_per_block = steps // num_blocks
+
+    # selected-only records, same as before
+    records = []
+
+    # NEW: all candidate token confidence records
+    all_token_records = []
+
+    # ===== statistics =====
+    forward_count = 0
+    decoding_steps_used = 0
+
+    for num_block in range(num_blocks):
+        block_start = prompt.shape[1] + num_block * block_length
+        block_end = prompt.shape[1] + (num_block + 1) * block_length
+
+        block_mask_index = (x[:, block_start:block_end] == mask_id)
+        num_transfer_tokens = get_num_transfer_tokens(block_mask_index, steps_per_block)
+
+        for i in range(steps_per_block):
+            global_step = num_block * steps_per_block + i + 1
+            local_step = i + 1
+
+            mask_index = (x == mask_id)
+
+            if cfg_scale > 0.:
+                un_x = x.clone()
+                un_x[prompt_index] = mask_id
+                x_ = torch.cat([x, un_x], dim=0)
+
+                logits = model(x_).logits
+                logits, un_logits = torch.chunk(logits, 2, dim=0)
+                logits = un_logits + (cfg_scale + 1) * (logits - un_logits)
+            else:
+                logits = model(x).logits
+
+            forward_count += 1
+
+            if logits_eos_inf:
+                logits[:, :, 126081] = -torch.inf
+
+            logits_with_noise = add_gumbel_noise(logits, temperature=temperature)
+
+            if confidence_eos_eot_inf:
+                logits_with_noise[:, :, 126081] = -torch.inf
+                logits_with_noise[:, :, 126348] = -torch.inf
+
+            x0 = torch.argmax(logits_with_noise, dim=-1)  # b, l
+
+            if remasking == 'low_confidence':
+                p = F.softmax(logits, dim=-1)
+                x0_p = torch.squeeze(
+                    torch.gather(
+                        p,
+                        dim=-1,
+                        index=torch.unsqueeze(x0, -1)
+                    ),
+                    -1
+                )  # b, l
+            elif remasking == 'random':
+                x0_p = torch.rand((x0.shape[0], x0.shape[1]), device=x0.device)
+            else:
+                raise NotImplementedError(remasking)
+
+            # 当前 block 之后的位置不能被解码
+            x0_p[:, prompt.shape[1] + (num_block + 1) * block_length:] = -np.inf
+
+            # x0 only proposes tokens for mask positions; fixed positions stay unchanged
+            x0 = torch.where(mask_index, x0, x)
+            confidence = torch.where(mask_index, x0_p, -np.inf)
+
+            transfer_index = torch.zeros_like(x0, dtype=torch.bool, device=x0.device)
+
+            selected_positions = []
+            selected_confidences = []
+
+            # 先选择本 step 要 unmask 的 token
+            for j in range(confidence.shape[0]):
+                _, select_index = torch.topk(
+                    confidence[j],
+                    k=num_transfer_tokens[j, i]
+                )
+
+                transfer_index[j, select_index] = True
+
+                selected_positions.extend(
+                    select_index.cpu().float().detach().numpy()
+                )
+                selected_confidences.extend(
+                    confidence[j, select_index].cpu().float().detach().numpy()
+                )
+
+            # NEW:
+            # 记录当前 block 内所有仍为 mask 的候选 token 的 top-1/confidence
+            # 注意：不记录未来 block，因为未来 block 此时不应该参与当前 block 解码。
+            current_block_mask_positions = (
+                torch.where(mask_index[0, block_start:block_end])[0] + block_start
+            )
+
+            selected_position_set = set(
+                torch.where(transfer_index[0])[0].detach().cpu().tolist()
+            )
+
+            for pos in current_block_mask_positions:
+                pos_int = int(pos.item())
+                token = int(x0[0, pos_int].item())
+                conf_float = float(confidence[0, pos_int].item())
+                is_selected = pos_int in selected_position_set
+
+                all_token_records.append({
+                    "global_step": global_step,
+                    "local_step": local_step,
+                    "block": num_block + 1,
+                    "position": pos_int,
+                    "block_relative_position": pos_int - block_start,
+                    "generation_relative_position": pos_int - prompt.shape[1],
+                    "confidence": conf_float,
+                    "token_id": token,
+                    "selected": is_selected,
+                })
+
+            # 保留原来的 selected-only records
+            for j in range(confidence.shape[0]):
+                selected_for_j = torch.where(transfer_index[j])[0]
+
+                for pos in selected_for_j:
+                    pos_int = int(pos.item())
+                    token = int(x0[j, pos].item())
+                    conf_float = float(confidence[j, pos].item())
+
+                    records.append({
+                        "global_step": global_step,
+                        "local_step": local_step,
+                        "step": local_step,  # backward compatible
+                        "block": num_block + 1,
+                        "position": pos_int,
+                        "block_relative_position": pos_int - block_start,
+                        "generation_relative_position": pos_int - prompt.shape[1],
+                        "confidence": conf_float,
+                        "token_id": token
+                    })
+
+            if log:
+                print(f"Selected positions: {selected_positions}")
+                print(f"Selected confidences: {selected_confidences}")
+
+            decoded_this_step = int(transfer_index.sum().item())
+            if decoded_this_step > 0:
+                decoding_steps_used += 1
+
+            # 更新序列
+            x[transfer_index] = x0[transfer_index]
+
+            # Maintain constraints
+            if constraints is not None:
+                for pos, token_id in constraints.items():
+                    absolute_pos = prompt.shape[1] + pos
+                    if absolute_pos < x.shape[1]:
+                        x[:, absolute_pos] = token_id
+
+    # ===== final statistics =====
+    decoded_tokens = len(records)
+    tpf = decoded_tokens / forward_count if forward_count > 0 else 0.0
+    avg_tokens_per_decoding_step = (
+        decoded_tokens / decoding_steps_used if decoding_steps_used > 0 else 0.0
+    )
+
+    print("====== Decoding Statistics ======")
+    print(f"Decoded tokens: {decoded_tokens}")
+    print(f"Model forward calls: {forward_count}")
+    print(f"Steps: {decoding_steps_used}")
+    print(f"TPF (tokens per forward): {tpf:.4f}")
+    print(f"TPS (tokens per decoding step): {avg_tokens_per_decoding_step:.4f}")
+    print(f"All candidate token records: {len(all_token_records)}")
+
+    if print_all_token_records:
+        # 推荐用 JSON object，避免你的旧 parser 误把 all_token_records 当 selected records。
+        print(json.dumps({
+            "selected_records": records,
+            "all_token_records": all_token_records,
+            "stats": {
+                "decoded_tokens": decoded_tokens,
+                "model_forward_calls": forward_count,
+                "steps": decoding_steps_used,
+                "tpf": tpf,
+                "tokens_per_decoding_step": avg_tokens_per_decoding_step,
+                "num_all_token_records": len(all_token_records),
+            }
+        }))
+    else:
+        # 兼容旧逻辑：只输出 selected-only records
+        print(json.dumps(records))
+        print(len(records))
+
+    return x
+
 def generate_adaptive_parallel(model, prompt, steps=128, gen_length=128,
                                block_length=128, temperature=0.,
                                cfg_scale=0.,
