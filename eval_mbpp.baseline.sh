@@ -22,7 +22,7 @@ length=256
 block=32
 
 # Note: eval_llada.py loads the model with torch_dtype=torch.bfloat16 internally.
-accelerate launch --num_processes 4 eval_llada.py \
+accelerate launch --num_processes 4 eval_llada.auto_thresh.py \
   --tasks mbpp \
   --confirm_run_unsafe_code \
   --model llada_dist \

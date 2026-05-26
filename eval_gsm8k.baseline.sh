@@ -20,7 +20,7 @@ mkdir -p evals_results/baseline
 length=256
 block=32
 
-accelerate launch --num_processes 4 eval_llada.py \
+accelerate launch --num_processes 4 eval_llada.auto_thresh.py \
   --tasks gsm8k_cot_zeroshot \
   --model llada_dist \
   --output_path evals_results/baseline/gsm8k_standard_len${length}_block${block}_4gpu \

@@ -21,7 +21,7 @@ mkdir -p evals_results/baseline
 length=256
 block=32
 
-accelerate launch --num_processes 4 eval_llada.py \
+accelerate launch --num_processes 4 eval_llada.auto_thresh.py \
   --tasks humaneval \
   --confirm_run_unsafe_code \
   --model llada_dist \
