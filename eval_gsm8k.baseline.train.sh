@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name="gsm8k_eval"
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
-#SBATCH --gres=gpu:4
+#SBATCH --ntasks-per-node=2
+#SBATCH --gres=gpu:2
 #SBATCH --time=24:00:00
 #SBATCH -o slurm.%j.%N.out
 #SBATCH -e slurm.%j.%N.err
@@ -12,7 +12,7 @@ conda activate soar
 
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+# export CUDA_VISIBLE_DEVICES=0,1,2,3
 
 mkdir -p logs
 mkdir -p evals_results/baseline
@@ -20,7 +20,7 @@ mkdir -p evals_results/baseline
 length=256
 block=32
 
-accelerate launch --num_processes 4 eval_llada.auto_thresh.py \
+accelerate launch --num_processes 2 eval_llada.auto_thresh.py \
   --tasks gsm8k_cot_zeroshot_train \
   --model llada_dist \
   --output_path evals_results/baseline/gsm8k_train_standard_len${length}_block${block}_4gpu \
