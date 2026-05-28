@@ -24,7 +24,7 @@ max_threshold=0.95
 min_threshold=0.05
 default_threshold=0.95
 
-threshold_json="token_threshold_reliability_fast/token_threshold_grid_c${correct_ratio}_mincount50.json"
+threshold_json="token_threshold_reliability_fast/token_threshold_grid_p${correct_ratio}_mincount50.json"
 
 accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --tasks gsm8k_cot_zeroshot \
