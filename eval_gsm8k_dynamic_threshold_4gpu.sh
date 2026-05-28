@@ -6,7 +6,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --partition=a100
+#SBATCH --partition=3090
 
 source ~/.bashrc
 conda activate ttrl_env
@@ -19,7 +19,7 @@ mkdir -p evals_results/auto_thresh
 
 length=256
 block=32
-correct_ratio=98
+correct_ratio=95
 max_threshold=0.95
 min_threshold=0.05
 default_threshold=0.95
