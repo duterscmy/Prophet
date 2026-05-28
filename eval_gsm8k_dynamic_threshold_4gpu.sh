@@ -10,7 +10,7 @@
 
 source ~/.bashrc
 conda activate ttrl_env
-
+cd /mnt/fast/nobackup/scratch4weeks/mc03002/prophet
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
 
