@@ -2,8 +2,8 @@
 #SBATCH --job-name=eval_gsm8k_dynamic
 #SBATCH --time=24:00:00
 #SBATCH --nodes=1
-#SBATCH --ntasks=2
-#SBATCH --gres=gpu:2
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --partition=a100
@@ -26,7 +26,7 @@ default_threshold=0.95
 
 threshold_json="token_threshold_reliability_fast/token_threshold_grid_c${correct_ratio}_mincount50.json"
 
-accelerate launch --num_processes 2 eval_llada.auto_thresh.py \
+accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --tasks gsm8k_cot_zeroshot \
   --model llada_dist \
   --output_path evals_results/auto_thresh/gsm8k_dynamic_c${correct_ratio}_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold} \
