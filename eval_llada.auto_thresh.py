@@ -510,7 +510,7 @@ class LLaDAEvalHarness(LM):
                 )
 
             else:
-                from generate import generate_full_confidence as generate_baseline
+                from generate import generate as generate_baseline
 
                 generated_out = generate_baseline(
                     self.model,
