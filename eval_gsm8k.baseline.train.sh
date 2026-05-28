@@ -10,12 +10,9 @@
 source ~/.bashrc
 conda activate soar
 
-# export HF_ENDPOINT=https://hf-mirror.com
-# export HF_DATASETS_OFFLINE=0
-
-unset HF_ENDPOINT
+export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
-export HF_HUB_OFFLINE=0
+
 
 # export CUDA_VISIBLE_DEVICES=0,1,2,3
 
