@@ -22,6 +22,7 @@ block=32
 # Note: eval_llada.py loads the model with torch_dtype=torch.bfloat16 internally.
 accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --tasks minerva_math500_train \
+  --limit 5000 \
   --model llada_dist \
   --num_fewshot 0 \
   --output_path evals_results/baseline/math500_train_standard_len${length}_block${block} \
