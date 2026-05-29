@@ -133,6 +133,10 @@ class LLaDAEvalHarness(LM):
         # Decoding mode args
         # ============================================================
 
+        self.print_detail_log = self._as_bool(
+            kwargs.pop('print_detail_log ', False)
+        )
+
         # 1. Whether to use adaptive parallel decoding.
         self.use_adaptive_parallel = self._as_bool(
             kwargs.pop('use_adaptive_parallel', False)
@@ -508,7 +512,10 @@ class LLaDAEvalHarness(LM):
                 )
 
             else:
-                from generate import generate as generate_baseline
+                if self.print_detail_log:
+                    from generate import generate_full_confidence as generate_baseline
+                else:
+                    from generate import generate as generate_baseline
 
                 generated_out = generate_baseline(
                     self.model,
@@ -520,7 +527,6 @@ class LLaDAEvalHarness(LM):
                     cfg_scale=self.cfg,
                     remasking=self.remasking,
                     mask_id=self.mask_id,
-                    constraints=constraints,
                 )
 
             generated_answer = self.tokenizer.decode(
