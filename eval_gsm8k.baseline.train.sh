@@ -24,6 +24,5 @@ accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --model llada_dist \
   --output_path evals_results/baseline/gsm8k_train_standard_len${length}_block${block}_4gpu \
   --log_samples \
-  --limit 1000 \
   --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=${block},use_adaptive_parallel=false,use_dynamic_threshold=false,print_detail_log=true \
   &> logs/baseline-gsm8k_train_standard-len${length}-block${block}.log
