@@ -30,5 +30,5 @@ accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --num_fewshot 0 \
   --output_path evals_results/baseline/mbpp_train_standard_len${length}_block${block} \
   --log_samples \
-  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=${block},use_adaptive_parallel=false,use_dynamic_threshold=false \
-  &> logs/mbpp_train§_standard-len${length}-block${block}.log
+  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=${block},use_adaptive_parallel=false,use_dynamic_threshold=false,print_detail_log=true \
+  &> logs/mbpp_train_standard-len${length}-block${block}.log
