@@ -513,7 +513,7 @@ class LLaDAEvalHarness(LM):
                     max_parallel_tokens=self.max_parallel_tokens,
                 )
 
-            elif self.print_detail_log:
+            else:
                 print("[INFO] Using baseline decoding with full confidence logging...")
                 from generate import generate_full_confidence
                 generated_out = generate_full_confidence(
@@ -528,20 +528,20 @@ class LLaDAEvalHarness(LM):
                     mask_id=self.mask_id,
                     print_all_token_records=True,
                 )
-            else:
-                print("[INFO] Using baseline decoding...")
-                from generate import generate as generate_baseline
-                generated_out = generate_baseline(
-                    self.model,
-                    prompt,
-                    steps=self.steps,
-                    gen_length=self.gen_length,
-                    block_length=self.block_length,
-                    temperature=0,
-                    cfg_scale=self.cfg,
-                    remasking=self.remasking,
-                    mask_id=self.mask_id,
-                )
+            # else:
+            #     print("[INFO] Using baseline decoding...")
+            #     from generate import generate as generate_baseline
+            #     generated_out = generate_baseline(
+            #         self.model,
+            #         prompt,
+            #         steps=self.steps,
+            #         gen_length=self.gen_length,
+            #         block_length=self.block_length,
+            #         temperature=0,
+            #         cfg_scale=self.cfg,
+            #         remasking=self.remasking,
+            #         mask_id=self.mask_id,
+            #     )
 
 
             generated_answer = self.tokenizer.decode(
