@@ -136,6 +136,7 @@ class LLaDAEvalHarness(LM):
         self.print_detail_log = self._as_bool(
             kwargs.pop('print_detail_log ', False)
         )
+        print(f"print_detail_log: {self.print_detail_log}")
 
         # 1. Whether to use adaptive parallel decoding.
         self.use_adaptive_parallel = self._as_bool(
@@ -471,8 +472,8 @@ class LLaDAEvalHarness(LM):
             # ============================================================
 
             if self.use_dynamic_threshold:
+                print("[INFO] Using dynamic token-wise threshold decoding...")
                 from generate import generate_token_threshold_parallel
-
                 generated_out = generate_token_threshold_parallel(
                     self.model,
                     prompt,
@@ -493,8 +494,9 @@ class LLaDAEvalHarness(LM):
                 )
 
             elif self.use_adaptive_parallel:
+                print("[INFO] Using adaptive parallel decoding with confidence threshold "
+                      f"{self.confidence_threshold}...")
                 from generate import generate_adaptive_parallel
-
                 generated_out = generate_adaptive_parallel(
                     self.model,
                     prompt,
@@ -511,12 +513,24 @@ class LLaDAEvalHarness(LM):
                     max_parallel_tokens=self.max_parallel_tokens,
                 )
 
+            elif self.print_detail_log:
+                print("[INFO] Using baseline decoding with full confidence logging...")
+                from generate import generate_full_confidence
+                generated_out = generate_full_confidence(
+                    self.model,
+                    prompt,
+                    steps=self.steps,
+                    gen_length=self.gen_length,
+                    block_length=self.block_length,
+                    temperature=0,
+                    cfg_scale=self.cfg,
+                    remasking=self.remasking,
+                    mask_id=self.mask_id,
+                    print_all_token_records=True,
+                )
             else:
-                if self.print_detail_log:
-                    from generate import generate_full_confidence as generate_baseline
-                else:
-                    from generate import generate as generate_baseline
-
+                print("[INFO] Using baseline decoding...")
+                from generate import generate as generate_baseline
                 generated_out = generate_baseline(
                     self.model,
                     prompt,
@@ -528,6 +542,7 @@ class LLaDAEvalHarness(LM):
                     remasking=self.remasking,
                     mask_id=self.mask_id,
                 )
+
 
             generated_answer = self.tokenizer.decode(
                 generated_out[0][prompt.shape[1]:],
