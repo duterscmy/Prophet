@@ -25,7 +25,7 @@ min_threshold=0.01
 default_threshold=$max_threshold
 min_count=200
 min_accepted=100
-threshold_json="/Users/mc03002/Documents/Prophet/token_threshold_on_trainset/math_token_threshold_grid_p100_mincount${min_count}_minaccepted${min_accepted}.json"
+threshold_json="token_threshold_on_trainset/math_token_threshold_grid_p100_mincount${min_count}_minaccepted${min_accepted}.json"
 
 accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --tasks minerva_math500 \
