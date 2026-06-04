@@ -24,6 +24,7 @@ threshold=0.90
 accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --tasks minerva_math500 \
   --model llada_dist \
+  --num_fewshot 0 \
   --output_path evals_results/adaptive_parallel/math500_adaptive_parallel_len${length}_block${block}_thr${threshold} \
   --log_samples \
   --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=${block},use_adaptive_parallel=true,confidence_threshold=${threshold},min_parallel_tokens=1 \
