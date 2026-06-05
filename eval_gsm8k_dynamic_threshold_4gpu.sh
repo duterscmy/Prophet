@@ -19,7 +19,7 @@ mkdir -p evals_results/auto_thresh
 
 length=256
 block=32
-correct_ratio=99
+correct_ratio=99.5
 max_threshold=0.90
 min_threshold=0.05
 default_threshold=$max_threshold
