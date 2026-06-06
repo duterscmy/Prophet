@@ -19,6 +19,7 @@ export HF_ALLOW_CODE_EVAL="1"
 mkdir -p logs
 mkdir -p evals_results/dynamic_threshold
 
+length=256
 block=32
 correct_ratio=99.5  #99.0/99.5/100.0
 max_threshold=0.90
