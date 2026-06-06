@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=eval_mbpp
-#SBATCH --time=24:00:00
+#SBATCH --time=6:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1

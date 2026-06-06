@@ -171,6 +171,7 @@ class LLaDAEvalHarness(LM):
         self.dynamic_threshold_dict = self._load_threshold_dict(
             self.dynamic_threshold_json
         )
+        self.enable_stagger_aware = self._as_bool(kwargs.pop('enable_stagger_aware', False))
 
         if self.rank == 0:
             print("====== LLaDA Harness Decoding Config ======")
@@ -472,26 +473,48 @@ class LLaDAEvalHarness(LM):
             # ============================================================
 
             if self.use_dynamic_threshold:
-                print("[INFO] Using dynamic token-wise threshold decoding...")
-                from generate import generate_token_threshold_parallel
-                generated_out = generate_token_threshold_parallel(
-                    self.model,
-                    prompt,
-                    threshold_dict=self.dynamic_threshold_dict,
-                    steps=self.steps,
-                    gen_length=self.gen_length,
-                    block_length=self.block_length,
-                    temperature=0,
-                    cfg_scale=self.cfg,
-                    remasking=self.remasking,
-                    mask_id=self.mask_id,
-                    log=False,
-                    max_threshold=self.max_threshold,
-                    min_threshold=self.min_threshold,
-                    default_threshold=self.default_threshold,
-                    min_parallel_tokens=self.min_parallel_tokens,
-                    max_parallel_tokens=self.max_parallel_tokens,
-                )
+                if self.enable_stagger_aware:
+                    print("[INFO] Using stagger-aware dynamic token-wise threshold decoding...")
+                    from generate import generate_token_threshold_parallel_stagger_aware
+                    generated_out = generate_token_threshold_parallel_stagger_aware(
+                        self.model,
+                        prompt,
+                        threshold_dict=self.dynamic_threshold_dict,
+                        steps=self.steps,
+                        gen_length=self.gen_length,
+                        block_length=self.block_length,
+                        temperature=0,
+                        cfg_scale=self.cfg,
+                        remasking=self.remasking,
+                        mask_id=self.mask_id,
+                        log=False,
+                        max_threshold=self.max_threshold,
+                        min_threshold=self.min_threshold,
+                        default_threshold=self.default_threshold,
+                        min_parallel_tokens=self.min_parallel_tokens,
+                        max_parallel_tokens=self.max_parallel_tokens,
+                    )
+                else:
+                    print("[INFO] Using dynamic token-wise threshold decoding...")
+                    from generate import generate_token_threshold_parallel
+                    generated_out = generate_token_threshold_parallel(
+                        self.model,
+                        prompt,
+                        threshold_dict=self.dynamic_threshold_dict,
+                        steps=self.steps,
+                        gen_length=self.gen_length,
+                        block_length=self.block_length,
+                        temperature=0,
+                        cfg_scale=self.cfg,
+                        remasking=self.remasking,
+                        mask_id=self.mask_id,
+                        log=False,
+                        max_threshold=self.max_threshold,
+                        min_threshold=self.min_threshold,
+                        default_threshold=self.default_threshold,
+                        min_parallel_tokens=self.min_parallel_tokens,
+                        max_parallel_tokens=self.max_parallel_tokens,
+                    )
 
             elif self.use_adaptive_parallel:
                 print("[INFO] Using adaptive parallel decoding with confidence threshold "
