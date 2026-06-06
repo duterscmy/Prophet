@@ -36,7 +36,7 @@ accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --confirm_run_unsafe_code \
   --model llada_dist \
   --num_fewshot 3 \
-  --output_path evals_results/dynamic_threshold/mbpp_dynamic_threshold_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold} \
+  --output_path evals_results/dynamic_threshold/mbpp_dynamic_threshold_from_test_c${correct_ratio}_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold} \
   --log_samples \
   --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=${block},use_adaptive_parallel=true,use_dynamic_threshold=true,dynamic_threshold_json=${threshold_json},max_threshold=${max_threshold},min_threshold=${min_threshold},default_threshold=${default_threshold},min_parallel_tokens=1 \
-  &> logs/mbpp_dynamic_threshold-len${length}-block${block}_maxthr${max_threshold}_minthr${min_threshold}.log
+  &> logs/mbpp_dynamic_threshold_from_test-c${correct_ratio}-len${length}-block${block}_maxthr${max_threshold}_minthr${min_threshold}.log
