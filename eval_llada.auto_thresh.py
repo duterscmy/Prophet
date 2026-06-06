@@ -475,8 +475,8 @@ class LLaDAEvalHarness(LM):
             if self.use_dynamic_threshold:
                 if self.enable_stagger_aware:
                     print("[INFO] Using stagger-aware dynamic token-wise threshold decoding...")
-                    from generate import generate_token_threshold_parallel_stagger_aware
-                    generated_out = generate_token_threshold_parallel_stagger_aware(
+                    from generate import generate_token_threshold_parallel_straggler_aware
+                    generated_out = generate_token_threshold_parallel_straggler_aware(
                         self.model,
                         prompt,
                         threshold_dict=self.dynamic_threshold_dict,
