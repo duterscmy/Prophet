@@ -24,9 +24,9 @@ correct_ratio=99.5  #99.0/99.5/100.0
 max_threshold=0.90
 min_threshold=0.01
 default_threshold=$max_threshold
-min_count=200
-min_accepted=100
-threshold_json="token_threshold_on_trainset/mbpp_token_threshold_grid_p${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}.json"
+min_count=100
+min_accepted=50
+threshold_json="token_threshold_on_trainset/humaneval_token_threshold_grid_p${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}.json"
 
 
 # Note: eval_llada.py loads the model with torch_dtype=torch.bfloat16 internally.
@@ -35,7 +35,7 @@ accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --confirm_run_unsafe_code \
   --model llada_dist \
   --num_fewshot 0 \
-  --output_path evals_results/dynamic_threshold/humaneval_dynamic_threshold_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold} \
+  --output_path evals_results/dynamic_threshold/humaneval_dynamic_threshold_from_test_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold} \
   --log_samples \
   --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=${block},use_adaptive_parallel=true,use_dynamic_threshold=true,dynamic_threshold_json=${threshold_json},max_threshold=${max_threshold},min_threshold=${min_threshold},default_threshold=${default_threshold},min_parallel_tokens=1 \
-  &> logs/humaneval_dynamic_threshold-len${length}-block${block}_maxthr${max_threshold}_minthr${min_threshold}.log
+  &> logs/humaneval_dynamic_threshold_from_test-len${length}-block${block}_maxthr${max_threshold}_minthr${min_threshold}.log
