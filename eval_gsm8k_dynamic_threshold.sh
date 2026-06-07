@@ -19,14 +19,14 @@ mkdir -p evals_results/auto_thresh
 
 length=256
 block=32
-correct_ratio=99.5
+correct_ratio=99.5 #99 99.5 99.7 100
 max_threshold=0.90
 min_threshold=0.05
 default_threshold=$max_threshold
 
 min_count=200
 min_accepted=100
-threshold_json="token_threshold_on_trainset/math_token_threshold_grid_p${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}.json"
+threshold_json="token_threshold_on_trainset/gsm8k_token_threshold_grid_p${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}.json"
 
 ls $threshold_json || (echo "Threshold json file not found: ${threshold_json}" && exit 1)
 
