@@ -13,6 +13,9 @@ conda activate ttrl_env
 cd /mnt/fast/nobackup/scratch4weeks/mc03002/prophet
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
+export HF_HOME=/projects/u6nc/public/mingyu/hf_cache
+export HF_HUB_CACHE=$HF_HOME/hub
+export HF_DATASETS_CACHE=$HF_HOME/datasets
 
 mkdir -p logs
 mkdir -p evals_results/auto_thresh

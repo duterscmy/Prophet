@@ -13,6 +13,9 @@ conda activate dllm
 
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
+export HF_HOME=/projects/u6nc/public/mingyu/hf_cache
+export HF_HUB_CACHE=$HF_HOME/hub
+export HF_DATASETS_CACHE=$HF_HOME/datasets
 export CUDA_VISIBLE_DEVICES=0
 export HF_ALLOW_CODE_EVAL="1"
 
