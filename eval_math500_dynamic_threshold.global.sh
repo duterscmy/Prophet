@@ -1,30 +1,33 @@
 #!/bin/bash
-#SBATCH --job-name=eval_math500_dynamic
-#SBATCH --time=1:00:00
+#SBATCH --job-name="eval_math500_dynamic"
 #SBATCH --nodes=1
-#SBATCH --ntasks=1
+#SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=80G
-#SBATCH --partition=a100
+#SBATCH --time=2:00:00
+#SBATCH -o slurm.%j.%N.out
+#SBATCH -e slurm.%j.%N.err
 
-source ~/.bashrc
-conda activate ttrl_env
-cd /mnt/fast/nobackup/scratch4weeks/mc03002/prophet
+### 激活conda环境
+source ~/.bashrc # 你的环境名
+conda activate dllm
+
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
+export CUDA_VISIBLE_DEVICES=0
+export HF_ALLOW_CODE_EVAL="1"
 
 mkdir -p logs
 mkdir -p evals_results/auto_thresh
 
 length=256
 block=32
-correct_ratio=100.0
+correct_ratio=99.5 #99 99.5 99.7 100
 max_threshold=0.90
-min_threshold=0.01
+min_threshold=0.05
 default_threshold=$max_threshold
-min_count=200
-min_accepted=100
+
+min_count=400
+min_accepted=200
 threshold_json="token_threshold_on_trainset/global_v2_token_threshold_grid_p${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}.json"
 
 ls $threshold_json || (echo "Threshold json file not found: ${threshold_json}" && exit 1)
