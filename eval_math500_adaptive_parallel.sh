@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=eval_math500_adaptive
-#SBATCH --time=24:00:00
+#SBATCH --time=1:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
