@@ -22,7 +22,7 @@ block=32
 accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --tasks gpqa_main_cot_zeroshot \
   --model llada_dist \
-  --output_path evals_results/baseline/gpqa_main_cot_zeroshot_len${length}_block${block} \
+  --output_path evals_results/baseline/gpqa_baseline_len${length}_block${block} \
   --log_samples \
   --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=${block},use_adaptive_parallel=false,use_dynamic_threshold=false \
-  &> logs/gpqa_main_cot_zeroshot-baseline-len${length}-block${block}.log
+  &> logs/gpqa_baseline_len${length}_block${block}.log
