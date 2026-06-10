@@ -1,20 +1,18 @@
 #!/bin/bash
-#SBATCH --job-name="eval_math500_dynamic"
+#SBATCH --job-name=eval_math500_dynamic
+#SBATCH --time=1:00:00
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
-#SBATCH --time=2:00:00
-#SBATCH -o slurm.%j.%N.out
-#SBATCH -e slurm.%j.%N.err
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=80G
+#SBATCH --partition=a100
 
-### 激活conda环境
-source ~/.bashrc # 你的环境名
-conda activate dllm
-
+source ~/.bashrc
+conda activate ttrl_env
+cd /mnt/fast/nobackup/scratch4weeks/mc03002/prophet
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
-export CUDA_VISIBLE_DEVICES=0
-export HF_ALLOW_CODE_EVAL="1"
 
 mkdir -p logs
 mkdir -p evals_results/auto_thresh
@@ -38,5 +36,5 @@ accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --num_fewshot 0 \
   --output_path evals_results/auto_thresh/math500_dynamic_from_global_v2_c${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold} \
   --log_samples \
-  --model_args model_path='/lus/lfs1aip2/projects/public/u6nc/mingyu/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=${block},use_dynamic_threshold=true,dynamic_threshold_json=${threshold_json},max_threshold=${max_threshold},min_threshold=${min_threshold},default_threshold=${default_threshold},min_parallel_tokens=1 \
+  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=${block},use_dynamic_threshold=true,dynamic_threshold_json=${threshold_json},max_threshold=${max_threshold},min_threshold=${min_threshold},default_threshold=${default_threshold},min_parallel_tokens=1 \
   &> logs/math500_dynamic_from_global_v2_c${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold}.log
