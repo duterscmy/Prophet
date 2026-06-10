@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=eval_gpqa
-#SBATCH --time=4:00:00
+#SBATCH --time=2:20:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
