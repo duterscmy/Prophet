@@ -32,7 +32,7 @@ ls $threshold_json || (echo "Threshold json file not found: ${threshold_json}" &
 
 accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --tasks bbh_cot_zeroshot \
-  --limit 0.1 \
+  --limit 20 \
   --model llada_dist \
   --num_fewshot 0 \
   --output_path evals_results/auto_thresh/bbh_dynamic_from_global_v2_c${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold} \

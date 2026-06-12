@@ -23,7 +23,7 @@ threshold=0.80
 
 accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --tasks bbh_cot_zeroshot \
-  --limit 500 \
+  --limit 20 \
   --model llada_dist \
   --output_path evals_results/adaptive_parallel/bbh_adaptive_parallel_len${length}_block${block}_thr${threshold} \
   --log_samples \
