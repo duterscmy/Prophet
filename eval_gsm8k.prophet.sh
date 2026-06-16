@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name="soar_eval"
+#SBATCH --job-name="prophet_gsm8k"
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:1
