@@ -1,16 +1,16 @@
 #!/bin/bash
-#SBATCH --job-name="soar_gsm8k"
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:1               # 请求2块GPU
+#SBATCH --job-name=eval_gsm8k_soar
 #SBATCH --time=3:00:00
-#SBATCH -o slurm.%j.%N.out
-#SBATCH -e slurm.%j.%N.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=80G
+#SBATCH --partition=a100
 
-### 激活conda环境
-source ~/.bashrc # 你的环境名
-conda activate soar
-
+source ~/.bashrc
+conda activate ttrl_env
+cd /mnt/fast/nobackup/scratch4weeks/mc03002/prophet
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
 export CUDA_VISIBLE_DEVICES=0
