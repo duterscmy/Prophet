@@ -49,7 +49,6 @@ def get_num_transfer_tokens(mask_index, steps):
 
 
 @torch.no_grad()
-@torch.no_grad()
 def generate(model, prompt, steps=128, gen_length=128, block_length=128, temperature=0.,
              cfg_scale=0., remasking='low_confidence', mask_id=126336, constraints=None,
              analyze_gap=False, tokenizer=None, answer_start_pos=None, 
