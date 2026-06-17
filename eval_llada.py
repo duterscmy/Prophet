@@ -252,183 +252,183 @@ class LLaDAEvalHarness(LM):
     def loglikelihood_rolling(self, requests):
         raise NotImplementedError
 
-def generate_until(self, requests: list[Instance]):
-    """
-    Memory-friendly generate_until.
+    def generate_until(self, requests: list[Instance]):
+        """
+        Memory-friendly generate_until.
 
-    This version avoids:
-      1. Dataset.from_list
-      2. Dataset.map
-      3. Dataset.with_format("torch")
-      4. Arrow / dill serialization issues
+        This version avoids:
+        1. Dataset.from_list
+        2. Dataset.map
+        3. Dataset.with_format("torch")
+        4. Arrow / dill serialization issues
 
-    It streams lm-eval requests one by one.
-    """
+        It streams lm-eval requests one by one.
+        """
 
-    import torch
-    from tqdm import tqdm
+        import torch
+        from tqdm import tqdm
 
-    out = []
+        out = []
 
-    for req_idx, req in enumerate(tqdm(requests, desc="Generating...")):
-        # ============================================================
-        # 1. Read request
-        # ============================================================
-        question_text = req.args[0]
+        for req_idx, req in enumerate(tqdm(requests, desc="Generating...")):
+            # ============================================================
+            # 1. Read request
+            # ============================================================
+            question_text = req.args[0]
 
-        request_kwargs = req.args[1] if len(req.args) > 1 else {}
-        stop_tokens = request_kwargs.get("until", [])
+            request_kwargs = req.args[1] if len(req.args) > 1 else {}
+            stop_tokens = request_kwargs.get("until", [])
 
-        if stop_tokens is None:
-            stop_tokens = []
+            if stop_tokens is None:
+                stop_tokens = []
 
-        # ============================================================
-        # 2. Tokenize one request at a time
-        # ============================================================
-        input_ids = self.tokenizer(question_text)["input_ids"]
+            # ============================================================
+            # 2. Tokenize one request at a time
+            # ============================================================
+            input_ids = self.tokenizer(question_text)["input_ids"]
 
-        prompt = torch.tensor(
-            input_ids,
-            dtype=torch.long,
-            device=self.device,
-        ).unsqueeze(0)
+            prompt = torch.tensor(
+                input_ids,
+                dtype=torch.long,
+                device=self.device,
+            ).unsqueeze(0)
 
-        # ============================================================
-        # 3. Prepare constraints if provided
-        # ============================================================
-        constraints = (
-            _parse_constraints(self.constraints_text, self.tokenizer)
-            if getattr(self, "constraints_text", None)
-            else None
-        )
+            # ============================================================
+            # 3. Prepare constraints if provided
+            # ============================================================
+            constraints = (
+                _parse_constraints(self.constraints_text, self.tokenizer)
+                if getattr(self, "constraints_text", None)
+                else None
+            )
 
-        # Determine answer start position for early exit
-        answer_start_pos = None
-        if getattr(self, "enable_early_exit", False) and constraints:
-            answer_start = max(constraints.keys()) + 2 if constraints else 0
-            answer_start_pos = prompt.shape[1] + answer_start
+            # Determine answer start position for early exit
+            answer_start_pos = None
+            if getattr(self, "enable_early_exit", False) and constraints:
+                answer_start = max(constraints.keys()) + 2 if constraints else 0
+                answer_start_pos = prompt.shape[1] + answer_start
 
-        # ============================================================
-        # 4. Generate with or without early exit / SOAR
-        # ============================================================
-        if getattr(self, "enable_early_exit", False):
-            if getattr(self, "enable_soar", False):
-                from generate_earlyexit_soar import generate
+            # ============================================================
+            # 4. Generate with or without early exit / SOAR
+            # ============================================================
+            if getattr(self, "enable_early_exit", False):
+                if getattr(self, "enable_soar", False):
+                    from generate_earlyexit_soar import generate
 
-                generated_out = generate(
-                    self.model,
-                    prompt,
-                    steps=self.steps,
-                    gen_length=self.gen_length,
-                    block_length=self.block_length,
-                    temperature=0,
-                    cfg_scale=self.cfg,
-                    remasking=self.remasking,
-                    mask_id=self.mask_id,
-                    constraints=constraints,
-                    analyze_gap=True,
-                    answer_start_pos=answer_start_pos,
-                    tokenizer=self.tokenizer,
-                    early_exit_thresholds={
-                        "early": self.early_threshold,
-                        "mid": self.mid_threshold,
-                        "late": self.late_threshold,
-                    },
-                )
+                    generated_out = generate(
+                        self.model,
+                        prompt,
+                        steps=self.steps,
+                        gen_length=self.gen_length,
+                        block_length=self.block_length,
+                        temperature=0,
+                        cfg_scale=self.cfg,
+                        remasking=self.remasking,
+                        mask_id=self.mask_id,
+                        constraints=constraints,
+                        analyze_gap=True,
+                        answer_start_pos=answer_start_pos,
+                        tokenizer=self.tokenizer,
+                        early_exit_thresholds={
+                            "early": self.early_threshold,
+                            "mid": self.mid_threshold,
+                            "late": self.late_threshold,
+                        },
+                    )
 
-            else:
-                from generate_earlyexit import generate
+                else:
+                    from generate_earlyexit import generate
 
-                generated_out = generate(
-                    self.model,
-                    prompt,
-                    steps=self.steps,
-                    gen_length=self.gen_length,
-                    block_length=self.block_length,
-                    temperature=0,
-                    cfg_scale=self.cfg,
-                    remasking=self.remasking,
-                    mask_id=self.mask_id,
-                    constraints=constraints,
-                    analyze_gap=True,
-                    answer_start_pos=answer_start_pos,
-                    tokenizer=self.tokenizer,
-                    early_exit_thresholds={
-                        "early": self.early_threshold,
-                        "mid": self.mid_threshold,
-                        "late": self.late_threshold,
-                    },
-                )
-
-        else:
-            if getattr(self, "enable_soar", False):
-                from generate_soar import generate
-
-                generated_out = generate(
-                    self.model,
-                    prompt,
-                    steps=self.steps,
-                    gen_length=self.gen_length,
-                    block_length=self.block_length,
-                    temperature=0,
-                    cfg_scale=self.cfg,
-                    remasking=self.remasking,
-                    mask_id=self.mask_id,
-                    # constraints=constraints,
-                )
+                    generated_out = generate(
+                        self.model,
+                        prompt,
+                        steps=self.steps,
+                        gen_length=self.gen_length,
+                        block_length=self.block_length,
+                        temperature=0,
+                        cfg_scale=self.cfg,
+                        remasking=self.remasking,
+                        mask_id=self.mask_id,
+                        constraints=constraints,
+                        analyze_gap=True,
+                        answer_start_pos=answer_start_pos,
+                        tokenizer=self.tokenizer,
+                        early_exit_thresholds={
+                            "early": self.early_threshold,
+                            "mid": self.mid_threshold,
+                            "late": self.late_threshold,
+                        },
+                    )
 
             else:
-                from generate import generate as generate_baseline
+                if getattr(self, "enable_soar", False):
+                    from generate_soar import generate
 
-                generated_out = generate_baseline(
-                    self.model,
-                    prompt,
-                    steps=self.steps,
-                    gen_length=self.gen_length,
-                    block_length=self.block_length,
-                    temperature=0,
-                    cfg_scale=self.cfg,
-                    remasking=self.remasking,
-                    mask_id=self.mask_id,
-                    constraints=constraints,
-                )
+                    generated_out = generate(
+                        self.model,
+                        prompt,
+                        steps=self.steps,
+                        gen_length=self.gen_length,
+                        block_length=self.block_length,
+                        temperature=0,
+                        cfg_scale=self.cfg,
+                        remasking=self.remasking,
+                        mask_id=self.mask_id,
+                        # constraints=constraints,
+                    )
 
-        # ============================================================
-        # 5. Decode generated answer
-        # ============================================================
-        generated_answer = self.tokenizer.decode(
-            generated_out[0][prompt.shape[1]:],
-            skip_special_tokens=False,
-        )
+                else:
+                    from generate import generate as generate_baseline
 
-        # Apply stop sequences
-        for stop_seq in stop_tokens:
-            if stop_seq and stop_seq in generated_answer:
-                generated_answer = generated_answer.split(stop_seq)[0]
-                break
+                    generated_out = generate_baseline(
+                        self.model,
+                        prompt,
+                        steps=self.steps,
+                        gen_length=self.gen_length,
+                        block_length=self.block_length,
+                        temperature=0,
+                        cfg_scale=self.cfg,
+                        remasking=self.remasking,
+                        mask_id=self.mask_id,
+                        constraints=constraints,
+                    )
 
-        # Remove special tokens
-        generated_answer_ids = self.tokenizer(generated_answer)["input_ids"]
-        generated_answer = self.tokenizer.decode(
-            generated_answer_ids,
-            skip_special_tokens=True,
-        )
+            # ============================================================
+            # 5. Decode generated answer
+            # ============================================================
+            generated_answer = self.tokenizer.decode(
+                generated_out[0][prompt.shape[1]:],
+                skip_special_tokens=False,
+            )
 
-        out.append(generated_answer)
+            # Apply stop sequences
+            for stop_seq in stop_tokens:
+                if stop_seq and stop_seq in generated_answer:
+                    generated_answer = generated_answer.split(stop_seq)[0]
+                    break
 
-        # ============================================================
-        # 6. Log input & output
-        # ============================================================
-        rank = getattr(self, "rank", getattr(self, "_rank", 0))
-        if rank == 0:
-            print(f"[LOG][Index] {req_idx}")
-            print(f"[LOG][Prompt] {question_text}")
-            print(f"[LOG][Answer] {generated_answer}\n")
+            # Remove special tokens
+            generated_answer_ids = self.tokenizer(generated_answer)["input_ids"]
+            generated_answer = self.tokenizer.decode(
+                generated_answer_ids,
+                skip_special_tokens=True,
+            )
 
-        if getattr(self, "accelerator", None) is not None:
-            self.accelerator.wait_for_everyone()
+            out.append(generated_answer)
 
-    return out
+            # ============================================================
+            # 6. Log input & output
+            # ============================================================
+            rank = getattr(self, "rank", getattr(self, "_rank", 0))
+            if rank == 0:
+                print(f"[LOG][Index] {req_idx}")
+                print(f"[LOG][Prompt] {question_text}")
+                print(f"[LOG][Answer] {generated_answer}\n")
+
+            if getattr(self, "accelerator", None) is not None:
+                self.accelerator.wait_for_everyone()
+
+        return out
 
 
 if __name__ == "__main__":
