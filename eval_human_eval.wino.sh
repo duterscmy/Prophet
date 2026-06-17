@@ -25,5 +25,5 @@ accelerate launch eval_llada.wino.py \
   --log_samples \
   --confirm_run_unsafe_code \
   --output_path evals_results/wino/humaneval-ns0-${length} \
-  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=32  \
+  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct-wino',gen_length=${length},steps=${length},block_length=32  \
   &> logs/wino-humaneval-ns0-${length}.log

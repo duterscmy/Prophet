@@ -24,5 +24,5 @@ accelerate launch eval_llada.wino.py \
   --num_fewshot 0 \
   --log_samples \
   --output_path evals_results/wino/gsm8kns0-${length} \
-  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=32  \
+  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct-wino',gen_length=${length},steps=${length},block_length=32  \
   &> logs/wino-gsm8k_cot_zeroshot-ns0-${length}.log
