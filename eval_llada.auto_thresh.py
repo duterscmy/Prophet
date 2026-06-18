@@ -519,8 +519,8 @@ class LLaDAEvalHarness(LM):
             elif self.use_adaptive_parallel:
                 print("[INFO] Using adaptive parallel decoding with confidence threshold "
                       f"{self.confidence_threshold}...")
-                from generate import generate_adaptive_parallel
-                generated_out = generate_adaptive_parallel(
+                from generate import generate_adaptive_parallel_full_confidence
+                generated_out = generate_adaptive_parallel_full_confidence(
                     self.model,
                     prompt,
                     steps=self.steps,
@@ -534,6 +534,7 @@ class LLaDAEvalHarness(LM):
                     confidence_threshold=self.confidence_threshold,
                     min_parallel_tokens=self.min_parallel_tokens,
                     max_parallel_tokens=self.max_parallel_tokens,
+                    print_all_token_records=True
                 )
 
             else:

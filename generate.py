@@ -532,17 +532,17 @@ def generate_full_confidence(model, prompt, steps=128, gen_length=128, block_len
     return x
 
 def generate_adaptive_parallel(model, prompt, steps=128, gen_length=128,
-                               block_length=128, temperature=0.,
-                               cfg_scale=0.,
-                               remasking='low_confidence',
-                               mask_id=126336,
-                               log=False,
-                               logits_eos_inf=False,
-                               confidence_eos_eot_inf=False,
-                               confidence_threshold=0.90,
-                               min_parallel_tokens=1,
-                            max_parallel_tokens=100,
-                               **kwargs):
+        block_length=128, temperature=0.,
+        cfg_scale=0.,
+        remasking='low_confidence',
+        mask_id=126336,
+        log=False,
+        logits_eos_inf=False,
+        confidence_eos_eot_inf=False,
+        confidence_threshold=0.90,
+        min_parallel_tokens=1,
+        max_parallel_tokens=100,
+        **kwargs):
     '''
     Args:
         model: Mask predictor.
@@ -835,6 +835,403 @@ def generate_adaptive_parallel(model, prompt, steps=128, gen_length=128,
 
     return current_seq
 
+
+def generate_adaptive_parallel_full_confidence(
+    model,
+    prompt,
+    steps=128,
+    gen_length=128,
+    block_length=128,
+    temperature=0.,
+    cfg_scale=0.,
+    remasking='low_confidence',
+    mask_id=126336,
+    log=False,
+    logits_eos_inf=False,
+    confidence_eos_eot_inf=False,
+    confidence_threshold=0.90,
+    min_parallel_tokens=1,
+    max_parallel_tokens=100,
+    constraints=None,
+    print_all_token_records=True,
+    **kwargs
+):
+    """
+    Confidence-threshold adaptive parallel decoding with full confidence logging.
+
+    Output format is consistent with generate_full_confidence:
+      {
+        "selected_records": [...],
+        "all_token_records": [...],
+        "stats": {...}
+      }
+
+    selected_records:
+        Tokens actually committed/unmasked.
+
+    all_token_records:
+        At each decoding step, records every still-masked candidate token
+        inside the current block, including its top-1 token, confidence,
+        threshold, and whether it was selected.
+    """
+
+    import json
+
+    # 初始化序列
+    x = torch.full(
+        (1, prompt.shape[1] + gen_length),
+        mask_id,
+        dtype=torch.long
+    ).to(model.device)
+
+    x[:, :prompt.shape[1]] = prompt.clone()
+
+    # Apply constraints
+    if constraints is not None:
+        for pos, token_id in constraints.items():
+            absolute_pos = prompt.shape[1] + pos
+            if absolute_pos < x.shape[1]:
+                x[:, absolute_pos] = token_id
+
+    current_seq = x.clone()
+    current_block = 0
+    prompt_index = (current_seq != mask_id)
+
+    assert gen_length % block_length == 0
+    num_blocks = gen_length // block_length
+
+    assert steps % num_blocks == 0
+    steps_per_block = steps // num_blocks
+
+    # selected-only records
+    records = []
+
+    # all candidate token records
+    all_token_records = []
+
+    # statistics
+    forward_count = 0
+    decoding_steps_used = 0
+
+    # adaptive decoding does not have fixed local step from for-loop,
+    # so maintain a local step counter for each block.
+    block_local_steps = [0 for _ in range(num_blocks)]
+
+    if log:
+        print("=== Confidence-based Adaptive Parallel Decoding Start ===")
+        print(f"Total blocks: {num_blocks}, Nominal steps per block: {steps_per_block}")
+        print(f"Confidence threshold: {confidence_threshold}")
+        print(f"Min parallel tokens: {min_parallel_tokens}")
+        print(f"Max parallel tokens: {max_parallel_tokens}")
+        print(f"Initial mask count: {(current_seq == mask_id).sum().item()}")
+
+    for global_step_idx in range(steps):
+        global_step = global_step_idx + 1
+
+        # 如果已经没有 mask，提前停止
+        if not (current_seq == mask_id).any():
+            if log:
+                print(f"No masks remaining, early stopping at step {global_step}")
+            break
+
+        # 当前 block 范围
+        block_start = prompt.shape[1] + current_block * block_length
+        block_end = prompt.shape[1] + (current_block + 1) * block_length
+
+        # 如果当前 block 已经没有 mask，移动到下一个 block
+        current_block_mask = current_seq[:, block_start:block_end] == mask_id
+        if not current_block_mask.any():
+            if current_block < num_blocks - 1:
+                current_block += 1
+                continue
+            else:
+                break
+
+        # 当前 block 的 local step，1-indexed，和 generate_full_confidence 对齐
+        block_local_steps[current_block] += 1
+        local_step = block_local_steps[current_block]
+
+        if log:
+            print(f"=== Global Step {global_step}/{steps}, Block {current_block + 1}, Local Step {local_step} ===")
+
+        # 计算 logits
+        with torch.no_grad():
+            if cfg_scale > 0.:
+                unconditional_seq = current_seq.clone()
+                unconditional_seq[prompt_index] = mask_id
+
+                combined_seq = torch.cat([current_seq, unconditional_seq], dim=0)
+                combined_logits = model(combined_seq).logits
+
+                conditional_logits, unconditional_logits = torch.chunk(
+                    combined_logits,
+                    2,
+                    dim=0
+                )
+
+                logits = unconditional_logits + (
+                    cfg_scale + 1
+                ) * (conditional_logits - unconditional_logits)
+            else:
+                logits = model(current_seq).logits
+
+        forward_count += 1
+
+        if logits_eos_inf:
+            logits[:, :, 126081] = -torch.inf
+
+        logits_with_noise = add_gumbel_noise(logits, temperature=temperature)
+
+        if confidence_eos_eot_inf:
+            logits_with_noise[:, :, 126081] = -torch.inf
+            logits_with_noise[:, :, 126348] = -torch.inf
+
+        x0 = torch.argmax(logits_with_noise, dim=-1)
+
+        if remasking == 'low_confidence':
+            p = F.softmax(logits, dim=-1)
+            x0_p = torch.gather(
+                p,
+                dim=-1,
+                index=x0.unsqueeze(-1)
+            ).squeeze(-1)
+        elif remasking == 'random':
+            x0_p = torch.rand(x0.shape, device=x0.device)
+        else:
+            raise NotImplementedError(remasking)
+
+        # 当前 mask 位置
+        mask_index = (current_seq == mask_id)
+
+        # x0 only proposes tokens for mask positions; fixed positions stay unchanged
+        x0 = torch.where(mask_index, x0, current_seq)
+
+        # confidence 只对 mask 位置有效
+        confidence = torch.where(mask_index, x0_p, -np.inf)
+
+        # 限制在当前 block 及之前，未来 block 不参与当前 block 解码
+        confidence[:, prompt.shape[1] + (current_block + 1) * block_length:] = -np.inf
+
+        # 当前 block 内仍为 mask 的 positions
+        block_mask_positions = (
+            torch.where(mask_index[0, block_start:block_end])[0] + block_start
+        )
+
+        if len(block_mask_positions) == 0:
+            if current_block < num_blocks - 1:
+                current_block += 1
+                continue
+            else:
+                break
+
+        block_mask_confidence = confidence[0, block_mask_positions]
+        block_mask_token_ids = x0[0, block_mask_positions]
+
+        # 高置信 token
+        high_confidence_mask = block_mask_confidence > confidence_threshold
+        high_confidence_indices = torch.where(high_confidence_mask)[0]
+
+        # ------------------------------------------------------------
+        # 先决定本 step selected indices，但先不更新 current_seq
+        # selected_indices 是 block_mask_positions 内部的 index
+        # ------------------------------------------------------------
+        if len(high_confidence_indices) >= min_parallel_tokens:
+            num_to_unmask = min(
+                len(high_confidence_indices),
+                max_parallel_tokens
+            )
+
+            _, top_indices = torch.topk(
+                block_mask_confidence[high_confidence_indices],
+                num_to_unmask
+            )
+
+            selected_indices = high_confidence_indices[top_indices]
+            strategy = "parallel"
+            parallel_group_size = num_to_unmask
+
+            if log:
+                print(
+                    f"Parallel decoding {num_to_unmask} tokens "
+                    f"from {len(high_confidence_indices)} candidates"
+                )
+
+        else:
+            # fallback: 单个最高 confidence token
+            top_prob, top_idx = torch.max(block_mask_confidence, dim=0)
+            selected_indices = top_idx.view(1)
+            strategy = "single"
+            parallel_group_size = 1
+
+            if log:
+                pos = block_mask_positions[top_idx].item()
+                conf = top_prob.item()
+                print(
+                    f"Single token fallback: position {pos}, "
+                    f"confidence {conf:.4f}"
+                )
+
+        selected_index_set = set(selected_indices.detach().cpu().tolist())
+
+        # ------------------------------------------------------------
+        # FULL LOG:
+        # 记录当前 block 内所有 remaining masked candidate tokens
+        # 格式尽量和 generate_full_confidence 保持一致
+        # ------------------------------------------------------------
+        for original_idx in range(len(block_mask_positions)):
+            pos_int = int(block_mask_positions[original_idx].item())
+            token = int(block_mask_token_ids[original_idx].item())
+            conf_float = float(block_mask_confidence[original_idx].item())
+            is_selected = original_idx in selected_index_set
+
+            all_token_records.append({
+                "global_step": global_step,
+                "local_step": local_step,
+                "block": current_block + 1,
+                "position": pos_int,
+                "block_relative_position": pos_int - block_start,
+                "generation_relative_position": pos_int - prompt.shape[1],
+                "confidence": conf_float,
+                "token_id": token,
+                "selected": is_selected,
+                # adaptive-specific extra fields
+                "threshold": float(confidence_threshold),
+                "strategy": strategy if is_selected else None,
+                "remaining_masks_in_block": int(len(block_mask_positions)),
+            })
+
+        # ------------------------------------------------------------
+        # Commit selected tokens + selected_records
+        # ------------------------------------------------------------
+        for idx in range(len(selected_indices)):
+            original_idx = int(selected_indices[idx].item())
+
+            pos_int = int(block_mask_positions[original_idx].item())
+            token = int(block_mask_token_ids[original_idx].item())
+            conf_float = float(block_mask_confidence[original_idx].item())
+
+            current_seq[0, pos_int] = token
+
+            records.append({
+                "global_step": global_step,
+                "local_step": local_step,
+                "step": local_step,  # backward compatible
+                "block": current_block + 1,
+                "position": pos_int,
+                "block_relative_position": pos_int - block_start,
+                "generation_relative_position": pos_int - prompt.shape[1],
+                "confidence": conf_float,
+                "token_id": token,
+                # adaptive-specific extra fields
+                "threshold": float(confidence_threshold),
+                "strategy": strategy,
+                "parallel_group_size": int(parallel_group_size),
+                "remaining_masks_in_block": int(len(block_mask_positions)),
+            })
+
+        decoding_steps_used += 1
+
+        # Maintain constraints
+        if constraints is not None:
+            for pos, token_id in constraints.items():
+                absolute_pos = prompt.shape[1] + pos
+                if absolute_pos < current_seq.shape[1]:
+                    current_seq[:, absolute_pos] = token_id
+
+        # 检查当前 block 是否完成
+        if current_block < num_blocks - 1:
+            current_block_mask = current_seq[:, block_start:block_end] == mask_id
+            if not current_block_mask.any():
+                current_block += 1
+
+        if log:
+            remaining = (current_seq == mask_id).sum().item()
+            print(f"Remaining masks: {remaining}")
+
+    if log:
+        print("=== Generation Complete ===")
+        print(f"Final mask count: {(current_seq == mask_id).sum().item()}")
+        print(f"Total decoded tokens: {len(records)}")
+
+    # ===== final statistics =====
+    decoded_tokens = len(records)
+    tpf = decoded_tokens / forward_count if forward_count > 0 else 0.0
+    avg_tokens_per_decoding_step = (
+        decoded_tokens / decoding_steps_used if decoding_steps_used > 0 else 0.0
+    )
+
+    parallel_token_count = sum(
+        1 for r in records if r.get("strategy") == "parallel"
+    )
+
+    single_token_count = sum(
+        1 for r in records if r.get("strategy") == "single"
+    )
+
+    # 统计 step 层面的 parallel/single
+    step_to_strategies = {}
+    step_to_group_size = {}
+
+    for r in records:
+        step = r["global_step"]
+        step_to_strategies.setdefault(step, set()).add(r.get("strategy"))
+
+        if r.get("strategy") == "parallel":
+            step_to_group_size[step] = r.get("parallel_group_size", 1)
+        else:
+            step_to_group_size.setdefault(step, 1)
+
+    parallel_step_count = 0
+    single_step_count = 0
+
+    for step, strategies in step_to_strategies.items():
+        if "parallel" in strategies:
+            parallel_step_count += 1
+        elif "single" in strategies:
+            single_step_count += 1
+
+    if len(step_to_group_size) > 0:
+        avg_group_size = sum(step_to_group_size.values()) / len(step_to_group_size)
+    else:
+        avg_group_size = 0.0
+
+    print("====== Decoding Statistics ======")
+    print(f"Decoded tokens: {decoded_tokens}")
+    print(f"Model forward calls: {forward_count}")
+    print(f"Actual decoding steps with unmask: {decoding_steps_used}")
+    print(f"TPF (tokens per forward): {tpf:.4f}")
+    print(f"Avg tokens per decoding step: {avg_tokens_per_decoding_step:.4f}")
+    print(f"Parallel decoded tokens: {parallel_token_count}")
+    print(f"Single decoded tokens: {single_token_count}")
+    print(f"Parallel decoding steps: {parallel_step_count}")
+    print(f"Single decoding steps: {single_step_count}")
+    print(f"Avg selected tokens per active decoding step: {avg_group_size:.4f}")
+    print(f"All candidate token records: {len(all_token_records)}")
+
+    if print_all_token_records:
+        print(json.dumps({
+            "selected_records": records,
+            "all_token_records": all_token_records,
+            "stats": {
+                "decoded_tokens": decoded_tokens,
+                "model_forward_calls": forward_count,
+                "steps": decoding_steps_used,
+                "tpf": tpf,
+                "tokens_per_decoding_step": avg_tokens_per_decoding_step,
+                "parallel_decoded_tokens": parallel_token_count,
+                "single_decoded_tokens": single_token_count,
+                "parallel_decoding_steps": parallel_step_count,
+                "single_decoding_steps": single_step_count,
+                "avg_selected_tokens_per_active_decoding_step": avg_group_size,
+                "num_all_token_records": len(all_token_records),
+                "confidence_threshold": float(confidence_threshold),
+            }
+        }))
+    else:
+        print(json.dumps(records))
+        print(len(records))
+
+    return current_seq
 
 
 def generate_token_threshold_parallel(
