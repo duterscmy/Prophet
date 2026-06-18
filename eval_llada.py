@@ -315,7 +315,7 @@ class LLaDAEvalHarness(LM):
                 if getattr(self, "enable_soar"):
                     from generate_earlyexit_soar import generate
 
-                    generated_out = generate(
+                    generated_out, gap_data = generate(
                         self.model,
                         prompt,
                         steps=self.steps,
@@ -339,7 +339,7 @@ class LLaDAEvalHarness(LM):
                 else:
                     from generate_earlyexit import generate
 
-                    generated_out = generate(
+                    generated_out, gap_data = generate(
                         self.model,
                         prompt,
                         steps=self.steps,

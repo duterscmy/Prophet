@@ -53,150 +53,235 @@ def generate(model, prompt, steps=128, gen_length=128, block_length=128, tempera
              cfg_scale=0., remasking='low_confidence', mask_id=126336, constraints=None,
              analyze_gap=False, tokenizer=None, answer_start_pos=None, 
              early_exit_thresholds=None, measure_time=False, **_):
-    '''LLaDA generation with Prophet early exit mechanism based on logits gap.'''
-    
-    print("This is original generate function with prophet")
-    # Initialize
+    """LLaDA generation with Prophet early exit mechanism based on logits gap."""
+
+    # =========================
+    # Init early-exit variables
+    # =========================
     early_exit_triggered = False
     exit_decision_step = None
     inference_start_time = time.time() if measure_time else None
-    
-    x = torch.full((1, prompt.shape[1] + gen_length), mask_id, dtype=torch.long).to(model.device)
+
+    # =========================
+    # Init decoding statistics
+    # =========================
+    forward_count = 0
+    decoded_tokens_counter = 0
+    decoding_steps_used = 0
+
+    x = torch.full(
+        (1, prompt.shape[1] + gen_length),
+        mask_id,
+        dtype=torch.long
+    ).to(model.device)
+
     x[:, :prompt.shape[1]] = prompt.clone()
-    
+
     # Apply constraints
+    constrained_positions = set()
     if constraints is not None:
         for pos, token_id in constraints.items():
             absolute_pos = prompt.shape[1] + pos
             if absolute_pos < x.shape[1]:
                 x[:, absolute_pos] = token_id
-    
+                constrained_positions.add(absolute_pos)
+
     prompt_index = (x != mask_id)
-    
+
     assert gen_length % block_length == 0
     num_blocks = gen_length // block_length
     assert steps % num_blocks == 0
     steps_per_block = steps // num_blocks
-    
+
     global_step = 0
     max_steps = steps
-    
+
     for num_block in range(num_blocks):
         block_start = prompt.shape[1] + num_block * block_length
         block_end = prompt.shape[1] + (num_block + 1) * block_length
+
         block_mask_index = (x[:, block_start:block_end] == mask_id)
         num_transfer_tokens = get_num_transfer_tokens(block_mask_index, steps_per_block)
-        
+
         for i in range(steps_per_block):
             global_step += 1
             mask_index = (x == mask_id)
-            
+
+            # If no masks remain, stop early
+            if not mask_index[:, prompt.shape[1]:].any():
+                break
+
+            # =========================
             # Forward pass
+            # =========================
             if cfg_scale > 0.:
                 un_x = x.clone()
                 un_x[prompt_index] = mask_id
                 x_ = torch.cat([x, un_x], dim=0)
+
                 logits = model(x_).logits
+                forward_count += 1
+
                 logits, un_logits = torch.chunk(logits, 2, dim=0)
                 logits = un_logits + (cfg_scale + 1) * (logits - un_logits)
             else:
                 logits = model(x).logits
-            
+                forward_count += 1
+
             logits_with_noise = add_gumbel_noise(logits, temperature=temperature)
             x0 = torch.argmax(logits_with_noise, dim=-1)
-            
+
+            # =========================
             # Compute confidence
+            # =========================
             if remasking == 'low_confidence':
                 p = F.softmax(logits, dim=-1)
-                x0_p = torch.squeeze(torch.gather(p, dim=-1, index=torch.unsqueeze(x0, -1)), -1)
+                x0_p = torch.squeeze(
+                    torch.gather(p, dim=-1, index=torch.unsqueeze(x0, -1)),
+                    -1
+                )
             elif remasking == 'random':
                 x0_p = torch.rand((x0.shape[0], x0.shape[1]), device=x0.device)
             else:
                 raise NotImplementedError(remasking)
-            
-            # Early exit check based on logits gap
+
+            # =========================
+            # Early exit check
+            # =========================
             if analyze_gap and answer_start_pos is not None:
-                # Calculate answer region
                 answer_length = 5
-                answer_positions = list(range(answer_start_pos, min(prompt.shape[1] + gen_length, answer_start_pos + answer_length)))
-                
-                # Analyze gap in answer region
+                answer_positions = list(
+                    range(
+                        answer_start_pos,
+                        min(prompt.shape[1] + gen_length, answer_start_pos + answer_length)
+                    )
+                )
+
                 gen_start = prompt.shape[1]
                 gen_logits = logits[:, gen_start:, :]
-                
+
                 answer_gaps = []
                 for pos in answer_positions:
                     if pos >= gen_start and pos < logits.shape[1]:
                         rel_pos = pos - gen_start
                         if rel_pos < gen_logits.shape[1]:
-                            # Get top-2 logits
                             top2_vals, _ = torch.topk(gen_logits[:, rel_pos, :], k=2, dim=-1)
                             gap = (top2_vals[0, 0] - top2_vals[0, 1]).item()
                             answer_gaps.append(gap)
-                
-                # Check early exit condition
+
                 if answer_gaps and not early_exit_triggered:
                     avg_answer_gap = sum(answer_gaps) / len(answer_gaps)
-                    
+
                     if should_early_exit(global_step, max_steps, avg_answer_gap, early_exit_thresholds):
                         print(f"Early exit at step {global_step}/{max_steps} with gap={avg_answer_gap:.3f}")
+
                         exit_decision_step = global_step
                         early_exit_triggered = True
-                        
-                        # Fill remaining masks
+
+                        # Fill remaining masks with current prediction
                         remaining_mask = (x == mask_id)
-                        x[remaining_mask] = x0[remaining_mask]
+                        remaining_gen_mask = remaining_mask[:, prompt.shape[1]:]
+
+                        num_filled = int(remaining_gen_mask.sum().item())
+                        if num_filled > 0:
+                            x[remaining_mask] = x0[remaining_mask]
+                            decoded_tokens_counter += num_filled
+                            decoding_steps_used += 1
+
                         break
-            
+
             # Mask out tokens beyond current block
             x0_p[:, block_end:] = -np.inf
-            
+
             x0 = torch.where(mask_index, x0, x)
             confidence = torch.where(mask_index, x0_p, -np.inf)
-            
+
+            # =========================
             # Transfer tokens
+            # =========================
             transfer_index = torch.zeros_like(x0, dtype=torch.bool, device=x0.device)
+
             for j in range(confidence.shape[0]):
                 k = int(num_transfer_tokens[j, i].item())
                 if k > 0:
                     _, select_index = torch.topk(confidence[j], k=k)
                     transfer_index[j, select_index] = True
-            
+
+            # Only count generated-region transferred tokens
+            gen_transfer_index = transfer_index[:, prompt.shape[1]:]
+            num_transferred = int(gen_transfer_index.sum().item())
+
+            if num_transferred > 0:
+                decoding_steps_used += 1
+                decoded_tokens_counter += num_transferred
+
             x[transfer_index] = x0[transfer_index]
-            
+
             # Maintain constraints
             if constraints is not None:
                 for pos, token_id in constraints.items():
                     absolute_pos = prompt.shape[1] + pos
                     if absolute_pos < x.shape[1]:
                         x[:, absolute_pos] = token_id
-        
-        # Break outer loop if early exit triggered
+
         if early_exit_triggered:
             break
-    
+
+    # =========================
+    # Final decoding statistics
+    # =========================
+    decoded_tokens = decoded_tokens_counter
+
+    tpf = decoded_tokens / forward_count if forward_count > 0 else 0.0
+    avg_tokens_per_decoding_step = (
+        decoded_tokens / decoding_steps_used if decoding_steps_used > 0 else 0.0
+    )
+
+    print("====== Decoding Statistics ======")
+    print(f"Decoded tokens: {decoded_tokens}")
+    print(f"Model forward calls: {forward_count}")
+    print(f"Actual decoding steps with unmask: {decoding_steps_used}")
+    print(f"TPF (tokens per forward): {tpf:.4f}")
+    print(f"Avg tokens per decoding step: {avg_tokens_per_decoding_step:.4f}")
+
+    decoding_stats = {
+        "decoded_tokens": decoded_tokens,
+        "model_forward_calls": forward_count,
+        "actual_decoding_steps_with_unmask": decoding_steps_used,
+        "tpf": tpf,
+        "avg_tokens_per_decoding_step": avg_tokens_per_decoding_step,
+    }
+
+    if measure_time:
+        decoding_stats["inference_time"] = time.time() - inference_start_time
+
+    # =========================
     # Return results
+    # =========================
     if analyze_gap:
         gap_data = {
-            'exit_info': {
-                'early_exit_triggered': early_exit_triggered,
-                'exit_decision_step': exit_decision_step,
-                'total_steps': max_steps,
-                'actual_steps': exit_decision_step if early_exit_triggered else max_steps
-            }
+            "exit_info": {
+                "early_exit_triggered": early_exit_triggered,
+                "exit_decision_step": exit_decision_step,
+                "total_steps": max_steps,
+                "actual_steps": exit_decision_step if early_exit_triggered else global_step,
+            },
+            "decoding_stats": decoding_stats,
         }
+
         if measure_time:
-            gap_data['exit_info']['inference_time'] = time.time() - inference_start_time
+            gap_data["exit_info"]["inference_time"] = decoding_stats["inference_time"]
+
         return x, gap_data
-    
+
     return x
 
 
 def main():
     device = 'cuda'
     
-    model = AutoModel.from_pretrained('GSAI-ML/LLaDA-8B-Instruct', trust_remote_code=True, torch_dtype=torch.bfloat16).to(device).eval()
-    tokenizer = AutoTokenizer.from_pretrained('GSAI-ML/LLaDA-8B-Instruct', trust_remote_code=True)
+    model = AutoModel.from_pretrained('/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct', trust_remote_code=True, torch_dtype=torch.bfloat16).to(device).eval()
+    tokenizer = AutoTokenizer.from_pretrained('/lus/lfs1aip2/projects/public/u6er/mingyu/models/LLaDA-8B-Instruct', trust_remote_code=True)
     
     prompt = "What is 25 + 37?"
     m = [{"role": "user", "content": prompt}]
