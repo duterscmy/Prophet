@@ -311,8 +311,8 @@ class LLaDAEvalHarness(LM):
             # ============================================================
             # 4. Generate with or without early exit / SOAR
             # ============================================================
-            if getattr(self, "enable_early_exit", False):
-                if getattr(self, "enable_soar", False):
+            if getattr(self, "enable_early_exit"):
+                if getattr(self, "enable_soar"):
                     from generate_earlyexit_soar import generate
 
                     generated_out = generate(
@@ -361,7 +361,7 @@ class LLaDAEvalHarness(LM):
                     )
 
             else:
-                if getattr(self, "enable_soar", False):
+                if getattr(self, "enable_soar"):
                     from generate_soar import generate
 
                     generated_out = generate(
