@@ -24,5 +24,5 @@ accelerate launch eval_llada.py \
   --num_fewshot 0 \
   --log_samples \
   --output_path evals_results/prophet/gsm8k-ns0-${length} \
-  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',enable_early_exit=true,gen_length=256,steps=256,block_length=32,answer_length=5 \
+  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',enable_early_exit=true,constraints_text="200:The|201:answer|202:is",gen_length=256,steps=256,block_length=32,answer_length=5 \
   &> logs/prophet-gsm8k_cot_zeroshot-ns0-${length}.log
