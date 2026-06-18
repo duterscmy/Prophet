@@ -1216,12 +1216,12 @@ def generate_token_threshold_parallel_straggler_aware(
     max_parallel_tokens=100,
     # ===== straggler-aware release =====
     enable_straggler_release=True,
-    release_remaining_8=0.20,
-    release_remaining_4=0.40,
-    release_remaining_2=0.60,
-    # release_remaining_8=0.10,
-    # release_remaining_4=0.20,
-    # release_remaining_2=0.30,
+    # release_remaining_8=0.20,
+    # release_remaining_4=0.40,
+    # release_remaining_2=0.60,
+    release_remaining_8=0.10,
+    release_remaining_4=0.20,
+    release_remaining_2=0.30,
     protect_special_tokens=True,
     special_token_ids=(126081, 126348),  # eos / eot
     **kwargs
