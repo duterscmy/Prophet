@@ -24,5 +24,5 @@ accelerate launch eval_llada.py \
   --model llada_dist \
   --log_samples \
   --output_path evals_results/prophet/humaneval-ns0-${length} \
-  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',enable_early_exit=true,enable_soar=false,constraints_text="200:The|201:answer|202:is",gen_length=256,steps=256,block_length=32,answer_length=5 \
+  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',enable_early_exit=true,constraints_text="200:The|201:answer|202:is",gen_length=256,steps=256,block_length=32,answer_length=5 \
   &> logs/prophet-humaneval-ns0-${length}.log
