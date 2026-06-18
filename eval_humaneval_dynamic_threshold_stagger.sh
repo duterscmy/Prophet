@@ -35,6 +35,7 @@ accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --tasks humaneval \
   --model llada_dist \
   --num_fewshot 0 \
+  --confirm_run_unsafe_code \
   --output_path evals_results/auto_thresh_stagger/humaneval_stagger_dynamic_c${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold} \
   --log_samples \
   --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',enable_stagger_aware=true,gen_length=${length},steps=${length},block_length=${block},use_dynamic_threshold=true,dynamic_threshold_json=${threshold_json},max_threshold=${max_threshold},min_threshold=${min_threshold},default_threshold=${default_threshold},min_parallel_tokens=1 \
