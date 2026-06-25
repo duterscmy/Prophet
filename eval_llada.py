@@ -105,11 +105,15 @@ class LLaDAEvalHarness(LM):
         self.block_length = block_length
         self.remasking = remasking    
         
+        # method choice
+        self.enable_early_exit = self._as_bool(kwargs.pop('enable_early_exit', False))
+        self.enable_soar = self._as_bool(kwargs.pop('enable_soar', False))
+        self.enable_dynamic_dllm = self._as_bool(kwargs.pop('enable_dynamic_dllm', False))
+
         # Early exit and constraint args
         self.constraints_text = kwargs.pop('constraints_text', '')
         self.answer_length = int(kwargs.pop('answer_length', 5))
-        self.enable_early_exit = self._as_bool(kwargs.pop('enable_early_exit', False))
-        self.enable_soar = self._as_bool(kwargs.pop('enable_soar', False))
+        
         # Early exit thresholds (optional)
         self.early_threshold = float(kwargs.pop('early_threshold', 7.5))
         self.mid_threshold = float(kwargs.pop('mid_threshold', 5.0))
@@ -360,38 +364,51 @@ class LLaDAEvalHarness(LM):
                         },
                     )
 
+            elif getattr(self, "enable_soar"):
+                from generate_soar import generate
+
+                generated_out = generate(
+                    self.model,
+                    prompt,
+                    steps=self.steps,
+                    gen_length=self.gen_length,
+                    block_length=self.block_length,
+                    temperature=0,
+                    cfg_scale=self.cfg,
+                    remasking=self.remasking,
+                    mask_id=self.mask_id,
+                    # constraints=constraints,
+                )
+            elif getattr(self, "enable_dynamic_dllm"):
+                from generate_dynamic_dllm import generate_pd
+
+                generated_out = generate_pd(
+                    self.model,
+                    prompt,
+                    steps=self.steps,
+                    gen_length=self.gen_length,
+                    block_length=self.block_length,
+                    temperature=0,
+                    cfg_scale=self.cfg,
+                    remasking=self.remasking,
+                    mask_id=self.mask_id,
+
+                )
             else:
-                if getattr(self, "enable_soar"):
-                    from generate_soar import generate
+                from generate import generate as generate_baseline
 
-                    generated_out = generate(
-                        self.model,
-                        prompt,
-                        steps=self.steps,
-                        gen_length=self.gen_length,
-                        block_length=self.block_length,
-                        temperature=0,
-                        cfg_scale=self.cfg,
-                        remasking=self.remasking,
-                        mask_id=self.mask_id,
-                        # constraints=constraints,
-                    )
-
-                else:
-                    from generate import generate as generate_baseline
-
-                    generated_out = generate_baseline(
-                        self.model,
-                        prompt,
-                        steps=self.steps,
-                        gen_length=self.gen_length,
-                        block_length=self.block_length,
-                        temperature=0,
-                        cfg_scale=self.cfg,
-                        remasking=self.remasking,
-                        mask_id=self.mask_id,
-                        constraints=constraints,
-                    )
+                generated_out = generate_baseline(
+                    self.model,
+                    prompt,
+                    steps=self.steps,
+                    gen_length=self.gen_length,
+                    block_length=self.block_length,
+                    temperature=0,
+                    cfg_scale=self.cfg,
+                    remasking=self.remasking,
+                    mask_id=self.mask_id,
+                    constraints=constraints,
+                )
 
             # ============================================================
             # 5. Decode generated answer
