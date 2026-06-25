@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=eval_gsm8k_prophet
+#SBATCH --job-name=eval_gsm8k_dynamic_dllm
 #SBATCH --time=4:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -13,10 +13,8 @@ conda activate ttrl_env
 cd /mnt/fast/nobackup/scratch4weeks/mc03002/prophet
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
-#  --limit 256
-length=256
 
-# constraints_text="200:The|201:answer|202:is"
+length=256
 
 accelerate launch eval_llada.py \
   --tasks gsm8k_cot_zeroshot \
