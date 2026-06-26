@@ -18,6 +18,7 @@ export HF_ALLOW_CODE_EVAL="1"
 length=256
 
 accelerate launch eval_llada.py \
+  --confirm_run_unsafe_code \
   --tasks humaneval \
   --model llada_dist \
   --num_fewshot 0 \
