@@ -165,9 +165,10 @@ def _generate_block_dynamic_internal(
 
             # Run model only on active sequences
             active_x = x[active_indices]
-            active_attention_mask = (active_x != tokenizer.pad_token_id)
+            # active_attention_mask = (active_x != tokenizer.pad_token_id)
 
-            all_logits = model(active_x, attention_mask=active_attention_mask).logits
+            # all_logits = model(active_x, attention_mask=active_attention_mask).logits
+            all_logits = model(active_x).logits
             forward_count += 1
 
             # Perform calculations on the dense, active-only logits for numerical stability
@@ -310,9 +311,10 @@ def _generate_step_block_dynamic_internal(
 
             # Run model only on active sequences
             active_x = x[active_indices]
-            active_attention_mask = (active_x != tokenizer.pad_token_id)
+            # active_attention_mask = (active_x != tokenizer.pad_token_id)
 
-            all_logits = model(active_x, attention_mask=active_attention_mask).logits
+            # all_logits = model(active_x, attention_mask=active_attention_mask).logits
+            all_logits = model(active_x).logits
             forward_count += 1
 
             # Perform calculations on the dense, active-only logits for numerical stability
