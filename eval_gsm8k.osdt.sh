@@ -22,5 +22,5 @@ accelerate launch eval_llada.py \
   --num_fewshot 0 \
   --log_samples \
   --output_path evals_results/osdt/gsm8k-ns0-${length} \
-  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',enable_osdt=true,osdt_threshold_cap=0.75,osdt_epsilon_ratio=0.20,gen_length=256,steps=256,block_length=32 \
-  &> logs/osdt-gsm8k_cot_zeroshot-ns0-${length}.log
+  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',enable_osdt=true,osdt_threshold_cap=0.75,osdt_epsilon_ratio=0.20,gen_length=256,steps=256,block_length=32
+  #&> logs/osdt-gsm8k_cot_zeroshot-ns0-${length}.log
