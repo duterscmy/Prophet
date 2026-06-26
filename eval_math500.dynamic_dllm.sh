@@ -25,4 +25,4 @@ accelerate launch eval_llada.py \
   --log_samples \
   --output_path evals_results/dynamic_dllm/math500-ns0-${length} \
   --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',enable_dynamic_dllm=true,gen_length=256,steps=256,block_length=32 \
-  &> logs/dynamic_dllm -math500-ns0-${length}.log
+  &> logs/dynamic_dllm-math500-ns0-${length}.log
