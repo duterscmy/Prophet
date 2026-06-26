@@ -278,7 +278,8 @@ class LLaDAEvalHarness(LM):
         from tqdm import tqdm
 
         out = []
-
+        reference_confidence_data = None  # For OSDT, store reference confidence data from the first problem
+        
         for req_idx, req in enumerate(tqdm(requests, desc="Generating...")):
             # ============================================================
             # 1. Read request
@@ -403,19 +404,20 @@ class LLaDAEvalHarness(LM):
                 from generate_osdt import generate
 
                 print("Collecting reference confidence data from the first problem...")
-                _, nfe_ref, reference_confidence_data = generate(
-                    self.model,
-                    self.tokenizer,
-                    prompt=input_ids,
-                    gen_length=self.gen_length,
-                    block_length=self.block_length,
-                    steps=self.steps,
-                    temperature=0.0,
-                    cfg_scale=0.0,
-                )
+                if reference_confidence_data is None:
+                    _, nfe_ref, reference_confidence_data = generate(
+                        self.model,
+                        self.tokenizer,
+                        prompt=input_ids,
+                        gen_length=self.gen_length,
+                        block_length=self.block_length,
+                        steps=self.steps,
+                        temperature=0.0,
+                        cfg_scale=0.0,
+                    )
 
                 print("Reference data collected. Proceeding with dynamic generation.")
-                out, nfe_dyn, _ = generate(
+                generated_out, nfe_dyn, _ = generate(
                     self.model,
                     self.tokenizer,
                     prompt=input_ids,
