@@ -27,6 +27,8 @@ def get_num_transfer_tokens(mask_index, steps):
         num_transfer_tokens[i, :remainder[i]] += 1
     return num_transfer_tokens
 
+
+@torch.no_grad()
 def _generate_for_data_collection(model, prompt, steps=128, gen_length=128, block_length=32, temperature=0., cfg_scale=0., remasking='low_confidence', mask_id=126336):
     """
     Generates text without dynamic thresholds to collect baseline confidence data.
@@ -71,6 +73,8 @@ def _generate_for_data_collection(model, prompt, steps=128, gen_length=128, bloc
 
     return x, nfe, block_step_confidences
 
+
+@torch.no_grad()
 def _get_transfer_index_factor_based(confidence, factor_value, mask_index):
     """
     Determines which tokens to unmask based on the factor-based strategy.
@@ -119,7 +123,7 @@ def _get_transfer_index_factor_based(confidence, factor_value, mask_index):
             
     return transfer_index
 
-
+@torch.no_grad()
 def _generate_block_dynamic_internal(
     model, prompt, gen_length, block_length, temperature, remasking, mask_id,
     thresholds, tokenizer, attention_mask, threshold_cap, epsilon_ratio,
@@ -261,7 +265,7 @@ def _generate_block_dynamic_internal(
 
     return x, nfe
 
-
+@torch.no_grad()
 def _generate_step_block_dynamic_internal(
     model, prompt, gen_length, block_length, temperature, remasking, mask_id,
     thresholds, tokenizer, attention_mask, threshold_cap=0.9,
@@ -391,7 +395,7 @@ def _generate_step_block_dynamic_internal(
 
     return x, nfe
 
-
+@torch.no_grad()
 def _calculate_thresholds(reference_confidence_data, dynamic_mode, metric):
     """
     Calculates dynamic thresholds from reference confidence data.
@@ -432,7 +436,7 @@ def _calculate_thresholds(reference_confidence_data, dynamic_mode, metric):
     else:
         raise ValueError(f"Unknown dynamic_mode: {dynamic_mode}")
 
-
+@torch.no_grad()
 def generate(model, tokenizer, prompt, gen_length=128, block_length=32, dynamic_mode='block', 
              reference_confidence_data=None, threshold_metric='average', 
              decoding_strategy='threshold', decoding_factor=1.0,
