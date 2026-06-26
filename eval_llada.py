@@ -118,6 +118,11 @@ class LLaDAEvalHarness(LM):
         self.early_threshold = float(kwargs.pop('early_threshold', 7.5))
         self.mid_threshold = float(kwargs.pop('mid_threshold', 5.0))
         self.late_threshold = float(kwargs.pop('late_threshold', 2.5))
+
+        # osdt args
+        self.enable_osdt = self._as_bool(kwargs.pop('enable_osdt', False))
+        self.osdt_threshold_cap = float(kwargs.pop('osdt_threshold_cap', 0.75))
+        self.osdt_epsilon_ratio = float(kwargs.pop('osdt_epsilon_ratio', 0.20))
         
     def _as_bool(self, v, default=False):
         if isinstance(v, bool):
@@ -393,6 +398,38 @@ class LLaDAEvalHarness(LM):
                     remasking=self.remasking,
                     mask_id=self.mask_id,
 
+                )
+            elif getattr(self, "enable_osdt"):
+                from generate_osdt import generate
+
+                print("Collecting reference confidence data from the first problem...")
+                _, nfe_ref, reference_confidence_data = generate(
+                    self.model,
+                    self.tokenizer,
+                    prompt=input_ids,
+                    gen_length=self.gen_length,
+                    block_length=self.block_length,
+                    steps=self.steps,
+                    temperature=0.0,
+                    cfg_scale=0.0,
+                )
+
+                print("Reference data collected. Proceeding with dynamic generation.")
+                out, nfe_dyn, _ = generate(
+                    self.model,
+                    self.tokenizer,
+                    prompt=input_ids,
+                    gen_length=self.gen_length,
+                    block_length=self.block_length,
+                    dynamic_mode="block",
+                    threshold_metric='q1',
+                    decoding_strategy='threshold',
+                    decoding_factor=1.0,
+                    reference_confidence_data=reference_confidence_data,
+                    temperature=0.0,
+                    remasking="low_confidence",
+                    threshold_cap=self.osdt_threshold_cap if hasattr(self, "osdt_threshold_cap") else 0.75,
+                    epsilon_ratio=self.osdt_epsilon_ratio if hasattr(self, "osdt_epsilon_ratio") else 0.20,
                 )
             else:
                 from generate import generate as generate_baseline
