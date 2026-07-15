@@ -22,7 +22,7 @@ import time
 
 # prevent crash due to waiting for other processes for more than 10 minutes
 import datetime
-torch.distributed.init_process_group(backend="nccl", timeout=datetime.timedelta(hours=2))
+# torch.distributed.init_process_group(backend="nccl", timeout=datetime.timedelta(hours=2))
 
 
 def set_seed(seed):
