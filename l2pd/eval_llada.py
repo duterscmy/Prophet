@@ -88,7 +88,8 @@ class LLaDAEvalHarness(LM):
         self.small_model.load_state_dict(torch.load(small_model_path))
         self.small_model.eval()
 
-        self.model = AutoModel.from_pretrained(model_path, trust_remote_code=True, torch_dtype=torch.bfloat16, **model_kwargs)
+        self.model = LLaDAModelLM.from_pretrained(model_path, torch_dtype=torch.bfloat16, **model_kwargs)
+        # self.model = AutoModel.from_pretrained(model_path, trust_remote_code=True, torch_dtype=torch.bfloat16, **model_kwargs)
         self.model.eval()
 
         self.device = torch.device(device)
