@@ -2032,6 +2032,8 @@ def generate_token_threshold_parallel_straggler_aware(
     print(f"Released selected tokens: {released_token_count}")
 
     return current_seq
+
+
 def main():
     import json
     device = 'cuda'
