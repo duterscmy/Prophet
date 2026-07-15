@@ -28,7 +28,12 @@ gen_length=256
 block_length=32
 method=L2P
 accept_thres=0.96
-accelerate launch eval_llada.py --tasks ${task} --model llada_dist --confirm_run_unsafe_code --num_fewshot 0 --log_samples \
---model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=$gen_length,steps=$gen_length,block_length=$block_length,method=$method,accept_thres=$accept_thres #\
+accelerate launch eval_llada.py --tasks ${task} \
+    --model llada_dist \
+    --confirm_run_unsafe_code \
+    --num_fewshot 0 \
+    --log_samples \
+    --output_path ../evals_results/l2pd/humaneval_l2pd_len${gen_length}_block${block_length}_thr${accept_thres} \
+    --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=$gen_length,steps=$gen_length,block_length=$block_length,method=$method,accept_thres=$accept_thres #\
 #> output/eval_results/$task/eval_${method}_${gen_length}_${accept_thres//./}.log 2>&1
 #echo "Finished: $task/eval_${method}_${gen_length}_${accept_thres//./}.log"
