@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=eval_human_eval
-#SBATCH --time=00:40:00
+#SBATCH --job-name=eval_math500
+#SBATCH --time=2:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
@@ -23,7 +23,7 @@ mkdir -p ../evals_results/l2pd
 # export HF_DATASETS_TRUST_REMOTE_CODE=true
 
 
-task=humaneval
+task=minerva_math500
 gen_length=256
 block_length=32
 method=L2P
