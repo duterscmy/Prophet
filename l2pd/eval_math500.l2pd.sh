@@ -33,6 +33,6 @@ accelerate launch eval_llada.py --tasks ${task} \
     --confirm_run_unsafe_code \
     --num_fewshot 0 \
     --log_samples \
-    --output_path ../evals_results/l2pd/humaneval_l2pd_len${gen_length}_block${block_length}_thr${accept_thres} \
+    --output_path ../evals_results/l2pd/math500_l2pd_len${gen_length}_block${block_length}_thr${accept_thres} \
     --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=$gen_length,steps=$gen_length,block_length=$block_length,method=$method,accept_thres=$accept_thres \
-    > ../logs/humaneval_l2pd-len${gen_length}-block${block_length}_thr${accept_thres}.log 2>&1
+    > ../logs/math500_l2pd-len${gen_length}-block${block_length}_thr${accept_thres}.log 2>&1
