@@ -314,17 +314,12 @@ class LLaDAEvalHarness(LM):
         end_time = time.perf_counter()
         elapsed = end_time - start_time
         
-        print(f"[GPU{self.accelerator.process_index}] Number of tokens: {num_tokens}")
-        print(f"[GPU{self.accelerator.process_index}] Generation time: {elapsed} seconds")
-        print(f"[GPU{self.accelerator.process_index}] Tokens per second: {num_tokens / elapsed}")
+        # print(f"[GPU{self.accelerator.process_index}] Number of tokens: {num_tokens}")
+        # print(f"[GPU{self.accelerator.process_index}] Generation time: {elapsed} seconds")
+        # print(f"[GPU{self.accelerator.process_index}] Tokens per second: {num_tokens / elapsed}")
         
-        self.accelerator.wait_for_everyone()
-        total_elapsed = self.accelerator.reduce(torch.tensor(elapsed, device=self.accelerator.device), reduction="sum").item()
-        total_num_tokens = self.accelerator.reduce(torch.tensor(num_tokens, device=self.accelerator.device), reduction="sum").item()
-        if self.accelerator.is_main_process:
-            print(f"Number of tokens: {total_num_tokens}")
-            print(f"Generation time: {total_elapsed} seconds")
-            print(f"Tokens per second: {total_num_tokens / total_elapsed}")
+        if getattr(self, "accelerator", None) is not None:
+            self.accelerator.wait_for_everyone()
 
         return out
 
