@@ -26,7 +26,7 @@ default_threshold=$max_threshold
 
 min_count=200
 min_accepted=100
-threshold_json="token_threshold_on_trainset/ace_train_token_threshold_grid_p${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}.json"
+threshold_json="token_threshold_on_trainset/math_train_token_threshold_grid_p${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}.json"
 
 ls $threshold_json || (echo "Threshold json file not found: ${threshold_json}" && exit 1)
 
@@ -36,8 +36,8 @@ for max_threshold in 0.95 0.90 0.85 0.80 0.75 0.70; do
     --tasks gpqa_main_cot_zeroshot \
     --model llada_dist \
     --num_fewshot 0 \
-    --output_path evals_results/auto_thresh/gpqa_dynamic_from_ace_c${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold} \
+    --output_path evals_results/auto_thresh/gpqa_dynamic_from_math_c${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold} \
     --log_samples \
     --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=${block},use_dynamic_threshold=true,dynamic_threshold_json=${threshold_json},max_threshold=${max_threshold},min_threshold=${min_threshold},default_threshold=${default_threshold},min_parallel_tokens=1 \
-    &> logs/gpqa_dynamic_from_ace_c${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold}.log
+    &> logs/gpqa_dynamic_from_math_c${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold}.log
 done
