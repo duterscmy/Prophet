@@ -6,7 +6,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=80G
-#SBATCH --partition=3090
+#SBATCH --partition=a100
 
 source ~/.bashrc
 conda activate ttrl_env
