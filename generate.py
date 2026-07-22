@@ -2048,6 +2048,13 @@ def generate_soar_token_threshold(
     log=False,
     logits_eos_inf=False,
     confidence_eos_eot_inf=False,
+    max_threshold=0.9,
+    min_threshold=0.05,
+    default_threshold=0.9,
+    min_parallel_tokens=1,
+    max_parallel_tokens=100,
+    max_beam_size=2,
+    **kwargs
 ):
     """
     SOAR decoding with token-level calibrated thresholds.
@@ -2089,10 +2096,10 @@ def generate_soar_token_threshold(
     # =========================
     # Internal SOAR config
     # =========================
-    default_threshold = 0.90
-    min_parallel_tokens = 1
-    max_parallel_tokens = 100
-    max_beam_size = 2
+    default_threshold = default_threshold
+    min_parallel_tokens = min_parallel_tokens
+    max_parallel_tokens = max_parallel_tokens
+    max_beam_size = max_beam_size
 
     # =========================
     # Normalize threshold dict

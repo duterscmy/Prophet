@@ -173,6 +173,7 @@ class LLaDAEvalHarness(LM):
         )
         self.enable_stagger_aware = self._as_bool(kwargs.pop('enable_stagger_aware', False))
         self.enable_soar = self._as_bool(kwargs.pop('enable_soar', False))
+        self.max_beam_size = int(kwargs.pop('max_beam_size', 2))
         if self.rank == 0:
             print("====== LLaDA Harness Decoding Config ======")
             print(f"use_dynamic_threshold: {self.use_dynamic_threshold}")
@@ -514,6 +515,7 @@ class LLaDAEvalHarness(LM):
                         default_threshold=self.default_threshold,
                         min_parallel_tokens=self.min_parallel_tokens,
                         max_parallel_tokens=self.max_parallel_tokens,
+                        max_beam_size=self.max_beam_size,
                     )
                 else:
                     print("[INFO] Using dynamic token-wise threshold decoding...")
