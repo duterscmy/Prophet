@@ -172,7 +172,7 @@ class LLaDAEvalHarness(LM):
             self.dynamic_threshold_json
         )
         self.enable_stagger_aware = self._as_bool(kwargs.pop('enable_stagger_aware', False))
-
+        self.enable_soar = self._as_bool(kwargs.pop('enable_soar', False))
         if self.rank == 0:
             print("====== LLaDA Harness Decoding Config ======")
             print(f"use_dynamic_threshold: {self.use_dynamic_threshold}")
@@ -494,6 +494,27 @@ class LLaDAEvalHarness(LM):
                         min_parallel_tokens=self.min_parallel_tokens,
                         max_parallel_tokens=self.max_parallel_tokens,
                     )
+                elif self.enable_soar:
+                    print("[INFO] Using SOAR dynamic token-wise threshold decoding...")
+                    from generate import generate_soar_token_threshold
+                    generated_out = generate_soar_token_threshold(
+                        self.model,
+                        prompt,
+                        threshold_dict=self.dynamic_threshold_dict,
+                        steps=self.steps,
+                        gen_length=self.gen_length,
+                        block_length=self.block_length,
+                        temperature=0,
+                        cfg_scale=self.cfg,
+                        remasking=self.remasking,
+                        mask_id=self.mask_id,
+                        log=False,
+                        max_threshold=self.max_threshold,
+                        min_threshold=self.min_threshold,
+                        default_threshold=self.default_threshold,
+                        min_parallel_tokens=self.min_parallel_tokens,
+                        max_parallel_tokens=self.max_parallel_tokens,
+                    )
                 else:
                     print("[INFO] Using dynamic token-wise threshold decoding...")
                     from generate import generate_token_threshold_parallel
@@ -552,20 +573,6 @@ class LLaDAEvalHarness(LM):
                     mask_id=self.mask_id,
                     print_all_token_records=True,
                 )
-            # else:
-            #     print("[INFO] Using baseline decoding...")
-            #     from generate import generate as generate_baseline
-            #     generated_out = generate_baseline(
-            #         self.model,
-            #         prompt,
-            #         steps=self.steps,
-            #         gen_length=self.gen_length,
-            #         block_length=self.block_length,
-            #         temperature=0,
-            #         cfg_scale=self.cfg,
-            #         remasking=self.remasking,
-            #         mask_id=self.mask_id,
-            #     )
 
 
             generated_answer = self.tokenizer.decode(

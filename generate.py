@@ -1233,7 +1233,6 @@ def generate_adaptive_parallel_full_confidence(
 
     return current_seq
 
-
 def generate_token_threshold_parallel(
     model,
     prompt,
@@ -2032,6 +2031,610 @@ def generate_token_threshold_parallel_straggler_aware(
     print(f"Released selected tokens: {released_token_count}")
 
     return current_seq
+
+
+
+def generate_soar_token_threshold(
+    model,
+    prompt,
+    threshold_dict,
+    steps=128,
+    gen_length=128,
+    block_length=128,
+    temperature=0.,
+    cfg_scale=0.,
+    remasking='low_confidence',
+    mask_id=126336,
+    log=False,
+    logits_eos_inf=False,
+    confidence_eos_eot_inf=False,
+):
+    """
+    SOAR decoding with token-level calibrated thresholds.
+
+    Core logic:
+        - Keep SOAR beam list.
+        - Replace fixed global confidence threshold with token-level threshold.
+        - If token_id exists in threshold_dict, use calibrated threshold.
+        - Otherwise use default_threshold = 0.90.
+        - If at least one token in current block satisfies its threshold,
+          use SOAR parallel decoding branch.
+        - If no token satisfies its threshold, use SOAR beam-search fallback.
+        - Beam candidates are ranked by cumulative_log_prob.
+        - Beam-search fallback keeps top-2 candidates.
+
+    Args:
+        model: Mask predictor.
+        prompt: Tensor of shape (1, L).
+        threshold_dict: dict, {token_id: threshold}. Keys can be int or str.
+        steps: Sampling steps.
+        gen_length: Generated answer length.
+        block_length: Block length.
+        temperature: Sampling temperature.
+        cfg_scale: Classifier-free guidance scale.
+        remasking: 'low_confidence' or 'random'.
+        mask_id: [MASK] token id.
+        log: Whether to print detailed logs.
+        logits_eos_inf: Whether to set EOS logit to -inf.
+        confidence_eos_eot_inf: Whether to suppress EOS/EOT for confidence.
+
+    Returns:
+        best_sequence: Final decoded sequence from the best beam.
+    """
+
+    import json
+
+    print("======SOAR + token-level calibrated threshold, temperature: {:.1f}====".format(temperature))
+
+    # =========================
+    # Internal SOAR config
+    # =========================
+    default_threshold = 0.90
+    min_parallel_tokens = 1
+    max_parallel_tokens = 100
+    max_beam_size = 2
+
+    # =========================
+    # Normalize threshold dict
+    # =========================
+    token_thresholds = {}
+    for k, v in threshold_dict.items():
+        try:
+            token_thresholds[int(k)] = float(v)
+        except Exception:
+            continue
+
+    def get_token_threshold(token_id):
+        token_id = int(token_id)
+        return float(token_thresholds.get(token_id, default_threshold))
+
+    # =========================
+    # Decoding statistics
+    # =========================
+    forward_count = 0
+    actual_global_steps = 0
+
+    # =========================
+    # Initialize beam
+    # Each beam item:
+    # (sequence, cumulative_log_prob, current_block, records)
+    # =========================
+    x = torch.full(
+        (1, prompt.shape[1] + gen_length),
+        mask_id,
+        dtype=torch.long
+    ).to(model.device)
+
+    x[:, :prompt.shape[1]] = prompt.clone()
+
+    beam = [(x.clone(), 0.0, 0, [])]
+    prompt_index = (x != mask_id)
+
+    assert gen_length % block_length == 0
+    num_blocks = gen_length // block_length
+
+    assert steps % num_blocks == 0
+    steps_per_block = steps // num_blocks
+
+    if log:
+        print("=== SOAR + Token Threshold Generation Start ===")
+        print(f"Total blocks: {num_blocks}, Steps per block: {steps_per_block}")
+        print(f"Max beam size: {max_beam_size}")
+        print(f"Default threshold: {default_threshold}")
+        print(f"Loaded token thresholds: {len(token_thresholds)}")
+        print(f"Initial mask count: {(x == mask_id).sum().item()}")
+
+    for global_step in range(steps):
+        if log:
+            print(f"=== Global Step {global_step + 1}/{steps} ===")
+
+        # Check whether any beam still has masks
+        has_remaining_masks = False
+        for seq, _, _, _ in beam:
+            if (seq == mask_id).any():
+                has_remaining_masks = True
+                break
+
+        if not has_remaining_masks:
+            if log:
+                print(f"No masks remaining in any beam, early stopping at step {global_step + 1}")
+            break
+
+        # Collect all beam sequences into a batch
+        beam_sequences = [seq for seq, _, _, _ in beam]
+        batch_sequences = torch.cat(beam_sequences, dim=0)
+
+        if log:
+            print(f"Processing batch of {len(beam)} beam sequences")
+            total_masks = sum((seq == mask_id).sum().item() for seq in beam_sequences)
+            print(f"Total remaining masks across beams: {total_masks}")
+
+        # =========================
+        # Batched forward pass
+        # One model(...) call counts as one forward call.
+        # =========================
+        with torch.no_grad():
+            if cfg_scale > 0.:
+                unconditional_seqs = []
+
+                for seq in beam_sequences:
+                    un_seq = seq.clone()
+                    un_seq[prompt_index] = mask_id
+                    unconditional_seqs.append(un_seq)
+
+                unconditional_batch = torch.cat(unconditional_seqs, dim=0)
+                combined_batch = torch.cat([batch_sequences, unconditional_batch], dim=0)
+
+                batch_logits = model(combined_batch).logits
+                forward_count += 1
+
+                conditional_logits, unconditional_logits = torch.chunk(batch_logits, 2, dim=0)
+                batch_logits = unconditional_logits + (cfg_scale + 1) * (
+                    conditional_logits - unconditional_logits
+                )
+            else:
+                batch_logits = model(batch_sequences).logits
+                forward_count += 1
+
+        actual_global_steps += 1
+
+        if logits_eos_inf:
+            batch_logits[:, :, 126081] = -torch.inf
+
+        # Add Gumbel noise and get predictions
+        logits_with_noise = add_gumbel_noise(batch_logits, temperature=temperature)
+
+        if confidence_eos_eot_inf:
+            logits_with_noise[:, :, 126081] = -torch.inf
+            logits_with_noise[:, :, 126348] = -torch.inf
+
+        batch_x0 = torch.argmax(logits_with_noise, dim=-1)
+
+        # Compute confidence
+        if remasking == 'low_confidence':
+            p = F.softmax(batch_logits, dim=-1)
+            batch_x0_p = torch.gather(
+                p,
+                dim=-1,
+                index=batch_x0.unsqueeze(-1)
+            ).squeeze(-1)
+        elif remasking == 'random':
+            batch_x0_p = torch.rand(batch_x0.shape, device=batch_x0.device)
+        else:
+            raise NotImplementedError(remasking)
+
+        new_beam_candidates = []
+        has_multi_unmask_candidate = False
+
+        # =========================
+        # Process each beam
+        # =========================
+        for beam_idx, (seq, cumulative_log_prob, current_block, records) in enumerate(beam):
+            x0 = batch_x0[beam_idx:beam_idx + 1]
+            x0_p = batch_x0_p[beam_idx:beam_idx + 1]
+
+            if log:
+                print(f"--- Processing Beam {beam_idx + 1}/{len(beam)} ---")
+                print(f"Current cumulative log prob: {cumulative_log_prob:.4f}")
+                print(f"Current block progress: {current_block}/{num_blocks}")
+
+            if not (seq == mask_id).any():
+                new_beam_candidates.append((seq, cumulative_log_prob, current_block, records))
+                if log:
+                    print("    Sequence already complete")
+                continue
+
+            # Current block range
+            block_start = prompt.shape[1] + current_block * block_length
+            block_end = prompt.shape[1] + (current_block + 1) * block_length
+
+            mask_index = (seq == mask_id)
+            confidence = torch.where(mask_index, x0_p, -np.inf)
+
+            # Only allow decoding up to the current block
+            confidence[:, prompt.shape[1] + (current_block + 1) * block_length:] = -np.inf
+
+            block_mask_positions = (
+                torch.where(mask_index[0, block_start:block_end])[0] + block_start
+            )
+
+            # If current block has no masks, move to next block
+            if len(block_mask_positions) == 0:
+                new_current_block = min(current_block + 1, num_blocks - 1)
+                new_beam_candidates.append(
+                    (seq, cumulative_log_prob, new_current_block, records)
+                )
+
+                if log:
+                    print(f"    No masks in block {current_block}, moving to block {new_current_block}")
+
+                continue
+
+            block_mask_confidence = confidence[0, block_mask_positions]
+            block_mask_token_ids = x0[0, block_mask_positions]
+
+            # =========================
+            # Token-level calibrated thresholds
+            # =========================
+            threshold_values = []
+            for token_id in block_mask_token_ids.detach().cpu().tolist():
+                threshold_values.append(get_token_threshold(token_id))
+
+            threshold_tensor = torch.tensor(
+                threshold_values,
+                dtype=block_mask_confidence.dtype,
+                device=block_mask_confidence.device
+            )
+
+            if log:
+                print(f"Block {current_block} mask positions: {block_mask_positions.detach().cpu().tolist()}")
+                print(f"Block {current_block} confidences: {block_mask_confidence.detach().cpu().float().tolist()}")
+                print(f"Block {current_block} thresholds: {threshold_tensor.detach().cpu().float().tolist()}")
+
+            # =========================
+            # Strategy 1:
+            # Parallel decode tokens whose confidence >= token threshold
+            # =========================
+            high_confidence_mask = block_mask_confidence >= threshold_tensor
+            high_confidence_indices = torch.where(high_confidence_mask)[0]
+
+            if len(high_confidence_indices) >= min_parallel_tokens:
+                if log:
+                    print(
+                        f"Strategy 1: Parallel decoding "
+                        f"{len(high_confidence_indices)} calibrated high-confidence tokens"
+                    )
+
+                num_to_unmask = min(len(high_confidence_indices), max_parallel_tokens)
+
+                top_probs, top_indices = torch.topk(
+                    block_mask_confidence[high_confidence_indices],
+                    num_to_unmask
+                )
+
+                selected_indices = high_confidence_indices[top_indices]
+
+                new_seq = seq.clone()
+                new_log_prob = cumulative_log_prob
+                new_records = records.copy()
+
+                for idx in range(num_to_unmask):
+                    original_idx = selected_indices[idx].item()
+                    pos = block_mask_positions[original_idx].item()
+                    token = x0[0, pos].item()
+                    prob = block_mask_confidence[original_idx].item()
+                    tau = threshold_tensor[original_idx].item()
+
+                    new_seq[0, pos] = token
+                    new_log_prob += prob
+
+                    new_records.append({
+                        "step": global_step + 1,
+                        "position": int(pos),
+                        "confidence": float(prob),
+                        "threshold": float(tau),
+                        "token_id": int(token),
+                        "strategy": "parallel",
+                        "block": int(current_block),
+                        "parallel_group_size": int(num_to_unmask),
+                        "beam_idx": int(beam_idx),
+                        "beam_size": int(len(beam)),
+                    })
+
+                new_current_block = current_block
+
+                if new_current_block < num_blocks - 1:
+                    current_block_mask = (new_seq[:, block_start:block_end] == mask_id)
+                    if not current_block_mask.any():
+                        new_current_block += 1
+                        if log:
+                            print(
+                                f"    Block {current_block} completed after parallel decoding, "
+                                f"moving to block {new_current_block}"
+                            )
+
+                new_beam_candidates.append(
+                    (new_seq, new_log_prob, new_current_block, new_records)
+                )
+
+                has_multi_unmask_candidate = True
+
+                if log:
+                    print(f"    Parallel unmasked {num_to_unmask} tokens")
+                    print(f"    New cumulative log prob: {new_log_prob:.4f}")
+
+            # =========================
+            # Strategy 2:
+            # No token satisfies calibrated threshold.
+            # Beam search over top-2 positions.
+            # =========================
+            else:
+                k = min(max_beam_size, len(block_mask_confidence))
+
+                if k == 0:
+                    new_current_block = min(current_block + 1, num_blocks - 1)
+                    new_beam_candidates.append(
+                        (seq, cumulative_log_prob, new_current_block, records)
+                    )
+
+                    if log:
+                        print(f"    No masks in current block, moving to block {new_current_block}")
+
+                    continue
+
+                top_probs, top_indices = torch.topk(block_mask_confidence, k)
+                top_positions = block_mask_positions[top_indices]
+                top_tokens = x0[0, top_positions]
+
+                if log:
+                    print(f"Strategy 2: Beam search fallback with k={k}")
+
+                for idx in range(k):
+                    new_seq = seq.clone()
+
+                    pos = top_positions[idx].item()
+                    token = top_tokens[idx].item()
+                    prob = top_probs[idx].item()
+                    tau = threshold_tensor[top_indices[idx]].item()
+
+                    new_seq[0, pos] = token
+                    new_log_prob = cumulative_log_prob + prob
+
+                    new_current_block = current_block
+                    if new_current_block < num_blocks - 1:
+                        current_block_mask = (new_seq[:, block_start:block_end] == mask_id)
+                        if not current_block_mask.any():
+                            new_current_block += 1
+
+                    new_records = records.copy()
+                    new_records.append({
+                        "step": global_step + 1,
+                        "position": int(pos),
+                        "confidence": float(prob),
+                        "threshold": float(tau),
+                        "token_id": int(token),
+                        "strategy": "beam",
+                        "block": int(current_block),
+                        "parallel_group_size": 1,
+                        "beam_idx": int(beam_idx),
+                        "beam_size": int(len(beam)),
+                    })
+
+                    new_beam_candidates.append(
+                        (new_seq, new_log_prob, new_current_block, new_records)
+                    )
+
+                    if log:
+                        print(
+                            f"    Beam candidate {idx + 1}/{k}: "
+                            f"pos={pos}, token={token}, conf={prob:.4f}, "
+                            f"tau={tau:.4f}, score={new_log_prob:.4f}"
+                        )
+
+        # If no new candidates are generated, stop
+        if not new_beam_candidates:
+            if log:
+                print("No new beam candidates generated, early stopping")
+            break
+
+        if log:
+            print(f"Total candidates before selection: {len(new_beam_candidates)}")
+
+        # Sort by cumulative log prob
+        new_beam_candidates.sort(key=lambda item: item[1], reverse=True)
+
+        # Deduplicate candidates by sequence
+        uniq_new_beam_candidates = []
+        seen = set()
+
+        for tensor, log_prob, block_progress, records in new_beam_candidates:
+            tensor_tuple = tuple(tensor.flatten().detach().cpu().numpy().tolist())
+
+            if tensor_tuple not in seen:
+                seen.add(tensor_tuple)
+                uniq_new_beam_candidates.append(
+                    (tensor, log_prob, block_progress, records)
+                )
+
+        if log:
+            print(f"Unique candidates after deduplication: {len(uniq_new_beam_candidates)}")
+
+        # =========================
+        # Dynamic beam size adjustment
+        # Keep original SOAR behavior:
+        # If parallel decoding happens, reduce beam to 1.
+        # Otherwise keep top-2 candidates.
+        # =========================
+        if has_multi_unmask_candidate and uniq_new_beam_candidates:
+            best_candidate = uniq_new_beam_candidates[0]
+            best_seq, best_log_prob, best_block, best_records = best_candidate
+
+            original_mask_count = (beam[0][0] == mask_id).sum().item()
+            current_mask_count = (best_seq == mask_id).sum().item()
+            masks_unmasked = original_mask_count - current_mask_count
+
+            if masks_unmasked >= min_parallel_tokens:
+                beam = [best_candidate]
+
+                if log:
+                    print(
+                        f"Dynamic adjustment: Parallel unmasked {masks_unmasked} tokens, "
+                        f"beam size reduced to 1"
+                    )
+            else:
+                beam_size = min(max_beam_size, len(uniq_new_beam_candidates))
+                beam = uniq_new_beam_candidates[:beam_size]
+
+                if log:
+                    print(f"Dynamic adjustment: Beam size set to {beam_size}")
+        else:
+            beam_size = min(max_beam_size, len(uniq_new_beam_candidates))
+            beam = uniq_new_beam_candidates[:beam_size]
+
+            if log:
+                print(f"Dynamic adjustment: No parallel decoding, beam size set to {beam_size}")
+
+        best_seq, best_score, best_block, best_records = beam[0]
+
+        if log:
+            print(f"Current beam size: {len(beam)}")
+            print(f"Best sequence score: {best_score:.4f}")
+            print(f"Best beam current block: {best_block}")
+            print(f"Remaining mask count: {(best_seq == mask_id).sum().item()}")
+
+    # =========================
+    # Select final best sequence
+    # =========================
+    if beam:
+        best_sequence, best_score, _, best_records = beam[0]
+
+        if log:
+            print("=== SOAR + Token Threshold Generation Complete ===")
+            print(f"Final sequence score: {best_score:.4f}")
+            print(f"Final mask count: {(best_sequence == mask_id).sum().item()}")
+            print(f"Total decoding records: {len(best_records)}")
+
+            if best_records:
+                steps_used = max(r["step"] for r in best_records)
+                avg_confidence = sum(r["confidence"] for r in best_records) / len(best_records)
+                avg_threshold = sum(r["threshold"] for r in best_records) / len(best_records)
+                print(f"Steps used: {steps_used}")
+                print(f"Average confidence: {avg_confidence:.4f}")
+                print(f"Average threshold: {avg_threshold:.4f}")
+
+            if not (best_sequence == mask_id).any():
+                print("✓ All masks have been filled!")
+            else:
+                print(f"⚠ Still has {(best_sequence == mask_id).sum().item()} masks remaining")
+    else:
+        best_sequence = x
+        best_records = []
+
+        if log:
+            print("=== SOAR + Token Threshold Generation Complete (No valid sequences) ===")
+
+    # =========================
+    # Decoding statistics for top-1 beam
+    # =========================
+    decoded_tokens = len(best_records)
+
+    if best_records:
+        decoding_steps_used = len(set(r["step"] for r in best_records))
+    else:
+        decoding_steps_used = 0
+
+    tpf = decoded_tokens / forward_count if forward_count > 0 else 0.0
+
+    avg_tokens_per_decoding_step = (
+        decoded_tokens / decoding_steps_used if decoding_steps_used > 0 else 0.0
+    )
+
+    parallel_token_count = sum(
+        1 for r in best_records if r.get("strategy") == "parallel"
+    )
+
+    beam_token_count = sum(
+        1 for r in best_records if r.get("strategy") == "beam"
+    )
+
+    step_to_strategies = {}
+    step_to_group_size = {}
+
+    for r in best_records:
+        step = r["step"]
+        step_to_strategies.setdefault(step, set()).add(r.get("strategy"))
+
+        if r.get("strategy") == "parallel":
+            step_to_group_size[step] = r.get("parallel_group_size", 1)
+        else:
+            step_to_group_size.setdefault(step, 1)
+
+    parallel_step_count = 0
+    beam_step_count = 0
+
+    for _, strategies in step_to_strategies.items():
+        if "parallel" in strategies:
+            parallel_step_count += 1
+        elif "beam" in strategies:
+            beam_step_count += 1
+
+    avg_group_size = (
+        sum(step_to_group_size.values()) / len(step_to_group_size)
+        if len(step_to_group_size) > 0 else 0.0
+    )
+
+    avg_threshold = (
+        sum(r["threshold"] for r in best_records) / len(best_records)
+        if best_records else 0.0
+    )
+
+    avg_confidence = (
+        sum(r["confidence"] for r in best_records) / len(best_records)
+        if best_records else 0.0
+    )
+
+    decoding_stats = {
+        "decoded_tokens": decoded_tokens,
+        "model_forward_calls": forward_count,
+        "actual_decoding_steps_with_unmask": decoding_steps_used,
+        "tpf": tpf,
+        "avg_tokens_per_decoding_step": avg_tokens_per_decoding_step,
+        "actual_global_steps": actual_global_steps,
+        "parallel_decoded_tokens": parallel_token_count,
+        "beam_decoded_tokens": beam_token_count,
+        "parallel_decoding_steps": parallel_step_count,
+        "beam_decoding_steps": beam_step_count,
+        "avg_selected_tokens_per_active_decoding_step": avg_group_size,
+        "avg_applied_threshold": avg_threshold,
+        "avg_selected_confidence": avg_confidence,
+        "default_threshold": default_threshold,
+        "loaded_token_thresholds": len(token_thresholds),
+        "max_beam_size": max_beam_size,
+    }
+
+    # Keep output compatible with your existing log parser:
+    # records JSON first, then len(records), then human-readable stats.
+    print(json.dumps(best_records))
+    print(len(best_records))
+
+    print("====== Decoding Statistics ======")
+    print(f"Decoded tokens: {decoded_tokens}")
+    print(f"Model forward calls: {forward_count}")
+    print(f"Actual decoding steps with unmask: {decoding_steps_used}")
+    print(f"TPF (tokens per forward): {tpf:.4f}")
+    print(f"Avg tokens per decoding step: {avg_tokens_per_decoding_step:.4f}")
+    print(f"Parallel decoded tokens: {parallel_token_count}")
+    print(f"Beam decoded tokens: {beam_token_count}")
+    print(f"Parallel decoding steps: {parallel_step_count}")
+    print(f"Beam decoding steps: {beam_step_count}")
+    print(f"Avg selected tokens per active decoding step: {avg_group_size:.4f}")
+    print(f"Avg applied threshold: {avg_threshold:.4f}")
+    print(f"Avg selected confidence: {avg_confidence:.4f}")
+
+    # Extra machine-readable stats
+    print(json.dumps(decoding_stats))
+
+    return best_sequence
 
 
 def main():

@@ -14,10 +14,9 @@ from lm_eval.api.registry import register_model
 from tqdm import tqdm
 
 from transformers import AutoTokenizer, AutoModel
-from generate_earlyexit import generate
 
 
-def _parse_constraints(text: str, tokenizer) -> dict[int, int]:
+def _parse_constraints(text: str, tokenizer) -> dict[int, int]: 
     """Parse constraint string like "120:THE|121:ANSWER" into position->token_id dict."""
     constraints: dict[int, int] = {}
     if text is None or text.strip() == "":
