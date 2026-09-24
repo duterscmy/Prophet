@@ -19,7 +19,7 @@ mkdir -p evals_results/adaptive_parallel
 
 length=256
 block=32
-threshold=0.95
+threshold=0.90
 
 accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --tasks gsm8k_cot_zeroshot \
