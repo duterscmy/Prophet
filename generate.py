@@ -510,24 +510,22 @@ def generate_full_confidence(model, prompt, steps=128, gen_length=128, block_len
     print(f"TPS (tokens per decoding step): {avg_tokens_per_decoding_step:.4f}")
     print(f"All candidate token records: {len(all_token_records)}")
 
-    if print_all_token_records:
-        # 推荐用 JSON object，避免你的旧 parser 误把 all_token_records 当 selected records。
-        print(json.dumps({
-            "selected_records": records,
-            "all_token_records": all_token_records,
-            "stats": {
-                "decoded_tokens": decoded_tokens,
-                "model_forward_calls": forward_count,
-                "steps": decoding_steps_used,
-                "tpf": tpf,
-                "tokens_per_decoding_step": avg_tokens_per_decoding_step,
-                "num_all_token_records": len(all_token_records),
-            }
-        }))
-    else:
+    print(json.dumps({
+        "selected_records": records,
+        "all_token_records": all_token_records,
+        "stats": {
+            "decoded_tokens": decoded_tokens,
+            "model_forward_calls": forward_count,
+            "steps": decoding_steps_used,
+            "tpf": tpf,
+            "tokens_per_decoding_step": avg_tokens_per_decoding_step,
+            "num_all_token_records": len(all_token_records),
+        }
+    }))
+
         # 兼容旧逻辑：只输出 selected-only records
-        print(json.dumps(records))
-        print(len(records))
+    print(json.dumps(records))
+    print(len(records))
 
     return x
 
@@ -1208,28 +1206,27 @@ def generate_adaptive_parallel_full_confidence(
     print(f"Avg selected tokens per active decoding step: {avg_group_size:.4f}")
     print(f"All candidate token records: {len(all_token_records)}")
 
-    if print_all_token_records:
-        print(json.dumps({
-            "selected_records": records,
-            "all_token_records": all_token_records,
-            "stats": {
-                "decoded_tokens": decoded_tokens,
-                "model_forward_calls": forward_count,
-                "steps": decoding_steps_used,
-                "tpf": tpf,
-                "tokens_per_decoding_step": avg_tokens_per_decoding_step,
-                "parallel_decoded_tokens": parallel_token_count,
-                "single_decoded_tokens": single_token_count,
-                "parallel_decoding_steps": parallel_step_count,
-                "single_decoding_steps": single_step_count,
-                "avg_selected_tokens_per_active_decoding_step": avg_group_size,
-                "num_all_token_records": len(all_token_records),
-                "confidence_threshold": float(confidence_threshold),
-            }
-        }))
-    else:
-        print(json.dumps(records))
-        print(len(records))
+    print(json.dumps({
+        "selected_records": records,
+        "all_token_records": all_token_records,
+        "stats": {
+            "decoded_tokens": decoded_tokens,
+            "model_forward_calls": forward_count,
+            "steps": decoding_steps_used,
+            "tpf": tpf,
+            "tokens_per_decoding_step": avg_tokens_per_decoding_step,
+            "parallel_decoded_tokens": parallel_token_count,
+            "single_decoded_tokens": single_token_count,
+            "parallel_decoding_steps": parallel_step_count,
+            "single_decoding_steps": single_step_count,
+            "avg_selected_tokens_per_active_decoding_step": avg_group_size,
+            "num_all_token_records": len(all_token_records),
+            "confidence_threshold": float(confidence_threshold),
+        }
+    }))
+
+    print(json.dumps(records))
+    print(len(records))
 
     return current_seq
 
@@ -1590,6 +1587,1152 @@ def generate_token_threshold_parallel(
 
     return current_seq
 
+def generate_token_threshold_parallel_full_confidence(
+    model,
+    prompt,
+    threshold_dict,
+    steps=128,
+    gen_length=128,
+    block_length=128,
+    temperature=0.,
+    cfg_scale=0.,
+    remasking='low_confidence',
+    mask_id=126336,
+    log=False,
+    logits_eos_inf=False,
+    confidence_eos_eot_inf=False,
+    max_threshold=0.9,
+    min_threshold=0.05,
+    default_threshold=0.9,
+    min_parallel_tokens=1,
+    max_parallel_tokens=100,
+    constraints=None,
+    print_all_token_records=True,
+    **kwargs
+):
+    """
+    Token-wise threshold adaptive parallel decoding with full confidence logging.
+
+    Decoding behavior is the same as generate_token_threshold_parallel(),
+    but additionally records every still-masked candidate token in the
+    current block at every decoding step.
+
+    Output format:
+    {
+        "selected_records": [...],
+        "all_token_records": [...],
+        "stats": {...}
+    }
+
+    selected_records:
+        Tokens actually committed/unmasked.
+
+    all_token_records:
+        At each decoding step, records every still-masked candidate token
+        inside the current block, including:
+            - top-1 token
+            - confidence
+            - raw token-specific threshold
+            - applied/clipped threshold
+            - whether default threshold was used
+            - whether threshold was clipped
+            - whether the candidate was selected
+            - decoding strategy
+    """
+
+    import json
+
+    # ============================================================
+    # Normalize threshold_dict
+    # ============================================================
+    token_thresholds = {}
+
+    for k, v in threshold_dict.items():
+        try:
+            token_thresholds[int(k)] = float(v)
+        except Exception:
+            continue
+
+    def get_token_threshold_info(token_id):
+        """
+        Return:
+            raw_threshold
+            applied_threshold
+            used_default
+            threshold_clipped
+        """
+        token_id = int(token_id)
+
+        if token_id in token_thresholds:
+            raw_tau = float(token_thresholds[token_id])
+            used_default = False
+        else:
+            raw_tau = float(default_threshold)
+            used_default = True
+
+        applied_tau = max(
+            float(min_threshold),
+            min(float(max_threshold), raw_tau)
+        )
+
+        threshold_clipped = abs(applied_tau - raw_tau) > 1e-12
+
+        return (
+            raw_tau,
+            applied_tau,
+            used_default,
+            threshold_clipped
+        )
+
+    # ============================================================
+    # Initialize sequence
+    # ============================================================
+    x = torch.full(
+        (1, prompt.shape[1] + gen_length),
+        mask_id,
+        dtype=torch.long
+    ).to(model.device)
+
+    x[:, :prompt.shape[1]] = prompt.clone()
+
+    # Apply constraints
+    if constraints is not None:
+        for pos, token_id in constraints.items():
+            absolute_pos = prompt.shape[1] + pos
+            if absolute_pos < x.shape[1]:
+                x[:, absolute_pos] = token_id
+
+    current_seq = x.clone()
+    current_block = 0
+
+    prompt_index = (current_seq != mask_id)
+
+    assert gen_length % block_length == 0
+    num_blocks = gen_length // block_length
+
+    assert steps % num_blocks == 0
+    steps_per_block = steps // num_blocks
+
+    # ============================================================
+    # Records
+    # ============================================================
+    # Tokens actually committed
+    records = []
+
+    # All still-masked candidate tokens at each decoding step
+    all_token_records = []
+
+    # ============================================================
+    # Statistics
+    # ============================================================
+    forward_count = 0
+    decoding_steps_used = 0
+
+    block_local_steps = [0 for _ in range(num_blocks)]
+
+    if log:
+        print("=== Token-threshold Adaptive Parallel Decoding Start ===")
+        print(f"Total blocks: {num_blocks}")
+        print(f"Nominal steps per block: {steps_per_block}")
+        print(f"Default threshold: {default_threshold}")
+        print(f"Min threshold: {min_threshold}")
+        print(f"Max threshold: {max_threshold}")
+        print(f"Loaded token thresholds: {len(token_thresholds)}")
+        print(f"Min parallel tokens: {min_parallel_tokens}")
+        print(f"Max parallel tokens: {max_parallel_tokens}")
+        print(f"Initial mask count: {(current_seq == mask_id).sum().item()}")
+
+    # ============================================================
+    # Decoding
+    # ============================================================
+    for global_step_idx in range(steps):
+
+        global_step = global_step_idx + 1
+
+        # --------------------------------------------------------
+        # Stop if generation is complete
+        # --------------------------------------------------------
+        if not (current_seq == mask_id).any():
+            if log:
+                print(
+                    f"No masks remaining, early stopping "
+                    f"at step {global_step}"
+                )
+            break
+
+        # --------------------------------------------------------
+        # Current block
+        # --------------------------------------------------------
+        block_start = (
+            prompt.shape[1]
+            + current_block * block_length
+        )
+
+        block_end = (
+            prompt.shape[1]
+            + (current_block + 1) * block_length
+        )
+
+        # Current block already completed
+        current_block_mask = (
+            current_seq[:, block_start:block_end] == mask_id
+        )
+
+        if not current_block_mask.any():
+            if current_block < num_blocks - 1:
+                current_block += 1
+                continue
+            else:
+                break
+
+        block_local_steps[current_block] += 1
+        local_step = block_local_steps[current_block]
+
+        if log:
+            print(
+                f"=== Global Step {global_step}/{steps}, "
+                f"Block {current_block + 1}, "
+                f"Local Step {local_step} ==="
+            )
+
+        # ========================================================
+        # Model forward
+        # ========================================================
+        with torch.no_grad():
+
+            if cfg_scale > 0.:
+
+                unconditional_seq = current_seq.clone()
+                unconditional_seq[prompt_index] = mask_id
+
+                combined_seq = torch.cat(
+                    [current_seq, unconditional_seq],
+                    dim=0
+                )
+
+                combined_logits = model(combined_seq).logits
+
+                (
+                    conditional_logits,
+                    unconditional_logits
+                ) = torch.chunk(
+                    combined_logits,
+                    2,
+                    dim=0
+                )
+
+                logits = (
+                    unconditional_logits
+                    + (cfg_scale + 1)
+                    * (
+                        conditional_logits
+                        - unconditional_logits
+                    )
+                )
+
+            else:
+                logits = model(current_seq).logits
+
+        forward_count += 1
+
+        # --------------------------------------------------------
+        # Optional EOS suppression
+        # --------------------------------------------------------
+        if logits_eos_inf:
+            logits[:, :, 126081] = -torch.inf
+
+        # --------------------------------------------------------
+        # Top-1 prediction
+        # --------------------------------------------------------
+        logits_with_noise = add_gumbel_noise(
+            logits,
+            temperature=temperature
+        )
+
+        if confidence_eos_eot_inf:
+            logits_with_noise[:, :, 126081] = -torch.inf
+            logits_with_noise[:, :, 126348] = -torch.inf
+
+        x0 = torch.argmax(
+            logits_with_noise,
+            dim=-1
+        )
+
+        # ========================================================
+        # Confidence
+        # ========================================================
+        if remasking == 'low_confidence':
+
+            p = F.softmax(
+                logits,
+                dim=-1
+            )
+
+            x0_p = torch.gather(
+                p,
+                dim=-1,
+                index=x0.unsqueeze(-1)
+            ).squeeze(-1)
+
+        elif remasking == 'random':
+
+            x0_p = torch.rand(
+                x0.shape,
+                device=x0.device
+            )
+
+        else:
+            raise NotImplementedError(remasking)
+
+        # ========================================================
+        # Current masked candidates
+        # ========================================================
+        mask_index = (
+            current_seq == mask_id
+        )
+
+        # Keep already-fixed positions unchanged
+        x0 = torch.where(
+            mask_index,
+            x0,
+            current_seq
+        )
+
+        confidence = torch.where(
+            mask_index,
+            x0_p,
+            -np.inf
+        )
+
+        # Future blocks cannot participate
+        confidence[
+            :,
+            prompt.shape[1]
+            + (current_block + 1) * block_length:
+        ] = -np.inf
+
+        # Current block's remaining masked positions
+        block_mask_positions = (
+            torch.where(
+                mask_index[
+                    0,
+                    block_start:block_end
+                ]
+            )[0]
+            + block_start
+        )
+
+        # Safety check
+        if len(block_mask_positions) == 0:
+
+            if current_block < num_blocks - 1:
+                current_block += 1
+                continue
+            else:
+                break
+
+        block_mask_confidence = confidence[
+            0,
+            block_mask_positions
+        ]
+
+        block_mask_token_ids = x0[
+            0,
+            block_mask_positions
+        ]
+
+        # ========================================================
+        # Token-specific thresholds
+        # ========================================================
+        raw_threshold_values = []
+        applied_threshold_values = []
+        used_default_values = []
+        clipped_values = []
+
+        for token_id in (
+            block_mask_token_ids
+            .detach()
+            .cpu()
+            .tolist()
+        ):
+
+            (
+                raw_tau,
+                applied_tau,
+                used_default,
+                threshold_clipped
+            ) = get_token_threshold_info(token_id)
+
+            raw_threshold_values.append(
+                raw_tau
+            )
+
+            applied_threshold_values.append(
+                applied_tau
+            )
+
+            used_default_values.append(
+                used_default
+            )
+
+            clipped_values.append(
+                threshold_clipped
+            )
+
+        threshold_tensor = torch.tensor(
+            applied_threshold_values,
+            dtype=block_mask_confidence.dtype,
+            device=block_mask_confidence.device
+        )
+
+        # ========================================================
+        # Decide eligible tokens
+        # ========================================================
+        high_confidence_mask = (
+            block_mask_confidence
+            >= threshold_tensor
+        )
+
+        high_confidence_indices = torch.where(
+            high_confidence_mask
+        )[0]
+
+        # --------------------------------------------------------
+        # Parallel decoding
+        # --------------------------------------------------------
+        if (
+            len(high_confidence_indices)
+            >= min_parallel_tokens
+        ):
+
+            num_to_unmask = min(
+                len(high_confidence_indices),
+                max_parallel_tokens
+            )
+
+            _, top_indices = torch.topk(
+                block_mask_confidence[
+                    high_confidence_indices
+                ],
+                num_to_unmask
+            )
+
+            selected_indices = (
+                high_confidence_indices[
+                    top_indices
+                ]
+            )
+
+            strategy = "parallel"
+            parallel_group_size = num_to_unmask
+
+            if log:
+                print(
+                    f"Parallel decoding "
+                    f"{num_to_unmask} tokens "
+                    f"from "
+                    f"{len(high_confidence_indices)} "
+                    f"eligible candidates"
+                )
+
+        # --------------------------------------------------------
+        # Single-token fallback
+        # --------------------------------------------------------
+        else:
+
+            top_prob, top_idx = torch.max(
+                block_mask_confidence,
+                dim=0
+            )
+
+            selected_indices = top_idx.view(1)
+
+            strategy = "single"
+            parallel_group_size = 1
+
+            if log:
+                pos = (
+                    block_mask_positions[
+                        top_idx
+                    ].item()
+                )
+
+                token_id = (
+                    block_mask_token_ids[
+                        top_idx
+                    ].item()
+                )
+
+                tau = (
+                    threshold_tensor[
+                        top_idx
+                    ].item()
+                )
+
+                print(
+                    f"Single token fallback: "
+                    f"position {pos}, "
+                    f"confidence {top_prob.item():.4f}, "
+                    f"threshold {tau:.4f}, "
+                    f"token_id {token_id}"
+                )
+
+        selected_index_set = set(
+            selected_indices
+            .detach()
+            .cpu()
+            .tolist()
+        )
+
+        # ========================================================
+        # FULL CONFIDENCE LOG
+        # ========================================================
+        # Record all current candidates BEFORE updating current_seq
+        for original_idx in range(
+            len(block_mask_positions)
+        ):
+
+            pos_int = int(
+                block_mask_positions[
+                    original_idx
+                ].item()
+            )
+
+            token = int(
+                block_mask_token_ids[
+                    original_idx
+                ].item()
+            )
+
+            conf_float = float(
+                block_mask_confidence[
+                    original_idx
+                ].item()
+            )
+
+            raw_tau = float(
+                raw_threshold_values[
+                    original_idx
+                ]
+            )
+
+            applied_tau = float(
+                applied_threshold_values[
+                    original_idx
+                ]
+            )
+
+            used_default = bool(
+                used_default_values[
+                    original_idx
+                ]
+            )
+
+            threshold_clipped = bool(
+                clipped_values[
+                    original_idx
+                ]
+            )
+
+            is_selected = (
+                original_idx
+                in selected_index_set
+            )
+
+            eligible = bool(
+                conf_float >= applied_tau
+            )
+
+            all_token_records.append({
+                "global_step": global_step,
+                "local_step": local_step,
+                "block": current_block + 1,
+
+                "position": pos_int,
+
+                "block_relative_position":
+                    pos_int - block_start,
+
+                "generation_relative_position":
+                    pos_int - prompt.shape[1],
+
+                "confidence": conf_float,
+                "token_id": token,
+
+                # threshold information
+                "raw_threshold": raw_tau,
+                "threshold": applied_tau,
+
+                "used_default_threshold":
+                    used_default,
+
+                "threshold_clipped":
+                    threshold_clipped,
+
+                # decision information
+                "eligible": eligible,
+                "selected": is_selected,
+
+                "strategy":
+                    strategy
+                    if is_selected
+                    else None,
+
+                "parallel_group_size":
+                    int(parallel_group_size)
+                    if is_selected
+                    else None,
+
+                "remaining_masks_in_block":
+                    int(
+                        len(
+                            block_mask_positions
+                        )
+                    ),
+            })
+
+        # ========================================================
+        # Commit selected tokens
+        # ========================================================
+        for idx in range(
+            len(selected_indices)
+        ):
+
+            original_idx = int(
+                selected_indices[
+                    idx
+                ].item()
+            )
+
+            pos_int = int(
+                block_mask_positions[
+                    original_idx
+                ].item()
+            )
+
+            token = int(
+                block_mask_token_ids[
+                    original_idx
+                ].item()
+            )
+
+            conf_float = float(
+                block_mask_confidence[
+                    original_idx
+                ].item()
+            )
+
+            raw_tau = float(
+                raw_threshold_values[
+                    original_idx
+                ]
+            )
+
+            applied_tau = float(
+                applied_threshold_values[
+                    original_idx
+                ]
+            )
+
+            used_default = bool(
+                used_default_values[
+                    original_idx
+                ]
+            )
+
+            threshold_clipped = bool(
+                clipped_values[
+                    original_idx
+                ]
+            )
+
+            # Commit
+            current_seq[
+                0,
+                pos_int
+            ] = token
+
+            records.append({
+                "global_step": global_step,
+                "local_step": local_step,
+                "step": local_step,
+
+                "block":
+                    current_block + 1,
+
+                "position":
+                    pos_int,
+
+                "block_relative_position":
+                    pos_int - block_start,
+
+                "generation_relative_position":
+                    pos_int - prompt.shape[1],
+
+                "confidence":
+                    conf_float,
+
+                "token_id":
+                    token,
+
+                "raw_threshold":
+                    raw_tau,
+
+                "threshold":
+                    applied_tau,
+
+                "used_default_threshold":
+                    used_default,
+
+                "threshold_clipped":
+                    threshold_clipped,
+
+                "strategy":
+                    strategy,
+
+                "parallel_group_size":
+                    int(
+                        parallel_group_size
+                    ),
+
+                "remaining_masks_in_block":
+                    int(
+                        len(
+                            block_mask_positions
+                        )
+                    ),
+            })
+
+        decoding_steps_used += 1
+
+        # ========================================================
+        # Maintain constraints
+        # ========================================================
+        if constraints is not None:
+
+            for pos, token_id in (
+                constraints.items()
+            ):
+
+                absolute_pos = (
+                    prompt.shape[1]
+                    + pos
+                )
+
+                if (
+                    absolute_pos
+                    < current_seq.shape[1]
+                ):
+                    current_seq[
+                        :,
+                        absolute_pos
+                    ] = token_id
+
+        # ========================================================
+        # Move to next block if finished
+        # ========================================================
+        if current_block < num_blocks - 1:
+
+            current_block_mask = (
+                current_seq[
+                    :,
+                    block_start:block_end
+                ]
+                == mask_id
+            )
+
+            if not current_block_mask.any():
+                current_block += 1
+
+        if log:
+
+            remaining = (
+                current_seq
+                == mask_id
+            ).sum().item()
+
+            print(
+                f"Remaining masks: "
+                f"{remaining}"
+            )
+
+    # ============================================================
+    # Final statistics
+    # ============================================================
+    if log:
+
+        print(
+            "=== Generation Complete ==="
+        )
+
+        print(
+            "Final mask count: "
+            f"{(current_seq == mask_id).sum().item()}"
+        )
+
+        print(
+            "Total decoded tokens: "
+            f"{len(records)}"
+        )
+
+    decoded_tokens = len(records)
+
+    tpf = (
+        decoded_tokens / forward_count
+        if forward_count > 0
+        else 0.0
+    )
+
+    avg_tokens_per_decoding_step = (
+        decoded_tokens
+        / decoding_steps_used
+        if decoding_steps_used > 0
+        else 0.0
+    )
+
+    parallel_token_count = sum(
+        1
+        for r in records
+        if r.get("strategy")
+        == "parallel"
+    )
+
+    single_token_count = sum(
+        1
+        for r in records
+        if r.get("strategy")
+        == "single"
+    )
+
+    # ------------------------------------------------------------
+    # Step-level parallel/single statistics
+    # ------------------------------------------------------------
+    step_to_strategies = {}
+    step_to_group_size = {}
+
+    for r in records:
+
+        step = r["global_step"]
+
+        step_to_strategies.setdefault(
+            step,
+            set()
+        ).add(
+            r.get("strategy")
+        )
+
+        if (
+            r.get("strategy")
+            == "parallel"
+        ):
+
+            step_to_group_size[
+                step
+            ] = r.get(
+                "parallel_group_size",
+                1
+            )
+
+        else:
+
+            step_to_group_size.setdefault(
+                step,
+                1
+            )
+
+    parallel_step_count = 0
+    single_step_count = 0
+
+    for (
+        step,
+        strategies
+    ) in step_to_strategies.items():
+
+        if "parallel" in strategies:
+            parallel_step_count += 1
+
+        elif "single" in strategies:
+            single_step_count += 1
+
+    if len(step_to_group_size) > 0:
+
+        avg_group_size = (
+            sum(
+                step_to_group_size.values()
+            )
+            / len(
+                step_to_group_size
+            )
+        )
+
+    else:
+        avg_group_size = 0.0
+
+    # ------------------------------------------------------------
+    # Threshold statistics
+    # ------------------------------------------------------------
+    avg_threshold = (
+        sum(
+            r["threshold"]
+            for r in records
+        )
+        / len(records)
+        if records
+        else 0.0
+    )
+
+    token_specific_candidate_count = sum(
+        1
+        for r in all_token_records
+        if not r[
+            "used_default_threshold"
+        ]
+    )
+
+    default_candidate_count = sum(
+        1
+        for r in all_token_records
+        if r[
+            "used_default_threshold"
+        ]
+    )
+
+    clipped_candidate_count = sum(
+        1
+        for r in all_token_records
+        if r[
+            "threshold_clipped"
+        ]
+    )
+
+    eligible_candidate_count = sum(
+        1
+        for r in all_token_records
+        if r[
+            "eligible"
+        ]
+    )
+
+    selected_clipped_count = sum(
+        1
+        for r in records
+        if r[
+            "threshold_clipped"
+        ]
+    )
+
+    selected_default_count = sum(
+        1
+        for r in records
+        if r[
+            "used_default_threshold"
+        ]
+    )
+
+    # ============================================================
+    # Print statistics
+    # ============================================================
+    print(
+        "====== Decoding Statistics ======"
+    )
+
+    print(
+        f"Decoded tokens: "
+        f"{decoded_tokens}"
+    )
+
+    print(
+        f"Model forward calls: "
+        f"{forward_count}"
+    )
+
+    print(
+        "Actual decoding steps with unmask: "
+        f"{decoding_steps_used}"
+    )
+
+    print(
+        f"TPF (tokens per forward): "
+        f"{tpf:.4f}"
+    )
+
+    print(
+        "Avg tokens per decoding step: "
+        f"{avg_tokens_per_decoding_step:.4f}"
+    )
+
+    print(
+        f"Parallel decoded tokens: "
+        f"{parallel_token_count}"
+    )
+
+    print(
+        f"Single decoded tokens: "
+        f"{single_token_count}"
+    )
+
+    print(
+        f"Parallel decoding steps: "
+        f"{parallel_step_count}"
+    )
+
+    print(
+        f"Single decoding steps: "
+        f"{single_step_count}"
+    )
+
+    print(
+        "Avg selected tokens per active "
+        f"decoding step: "
+        f"{avg_group_size:.4f}"
+    )
+
+    print(
+        f"Avg applied threshold: "
+        f"{avg_threshold:.4f}"
+    )
+
+    print(
+        "All candidate token records: "
+        f"{len(all_token_records)}"
+    )
+
+    print(
+        "Token-specific candidate records: "
+        f"{token_specific_candidate_count}"
+    )
+
+    print(
+        "Default-threshold candidate records: "
+        f"{default_candidate_count}"
+    )
+
+    print(
+        "Clipped candidate records: "
+        f"{clipped_candidate_count}"
+    )
+
+    print(
+        "Eligible candidate records: "
+        f"{eligible_candidate_count}"
+    )
+
+    print(
+        "Selected tokens using default threshold: "
+        f"{selected_default_count}"
+    )
+
+    print(
+        "Selected tokens with clipped threshold: "
+        f"{selected_clipped_count}"
+    )
+
+    # ============================================================
+    # Structured JSON output
+    # ============================================================
+    output = {
+        "selected_records":
+            records,
+
+        "all_token_records":
+            all_token_records,
+
+        "stats": {
+            "decoded_tokens":
+                decoded_tokens,
+
+            "model_forward_calls":
+                forward_count,
+
+            "steps":
+                decoding_steps_used,
+
+            "tpf":
+                tpf,
+
+            "tokens_per_decoding_step":
+                avg_tokens_per_decoding_step,
+
+            "parallel_decoded_tokens":
+                parallel_token_count,
+
+            "single_decoded_tokens":
+                single_token_count,
+
+            "parallel_decoding_steps":
+                parallel_step_count,
+
+            "single_decoding_steps":
+                single_step_count,
+
+            "avg_selected_tokens_per_active_decoding_step":
+                avg_group_size,
+
+            "avg_applied_threshold":
+                avg_threshold,
+
+            "num_all_token_records":
+                len(all_token_records),
+
+            "token_specific_candidate_records":
+                token_specific_candidate_count,
+
+            "default_threshold_candidate_records":
+                default_candidate_count,
+
+            "clipped_candidate_records":
+                clipped_candidate_count,
+
+            "eligible_candidate_records":
+                eligible_candidate_count,
+
+            "selected_default_threshold_tokens":
+                selected_default_count,
+
+            "selected_clipped_threshold_tokens":
+                selected_clipped_count,
+
+            "default_threshold":
+                float(
+                    default_threshold
+                ),
+
+            "max_threshold":
+                float(
+                    max_threshold
+                ),
+
+            "min_threshold":
+                float(
+                    min_threshold
+                ),
+
+            "num_loaded_token_thresholds":
+                len(
+                    token_thresholds
+                ),
+        }
+    }
+
+    if print_all_token_records:
+        print(
+            json.dumps(
+                output
+            )
+        )
+
+    # Backward-compatible selected-only output
+    print(
+        json.dumps(
+            records
+        )
+    )
+
+    print(
+        len(records)
+    )
+
+    return current_seq
 
 def generate_token_threshold_parallel_straggler_aware(
     model,

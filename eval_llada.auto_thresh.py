@@ -519,8 +519,8 @@ class LLaDAEvalHarness(LM):
                     )
                 else:
                     print("[INFO] Using dynamic token-wise threshold decoding...")
-                    from generate import generate_token_threshold_parallel
-                    generated_out = generate_token_threshold_parallel(
+                    from generate import generate_token_threshold_parallel_full_confidence
+                    generated_out = generate_token_threshold_parallel_full_confidence(
                         self.model,
                         prompt,
                         threshold_dict=self.dynamic_threshold_dict,
