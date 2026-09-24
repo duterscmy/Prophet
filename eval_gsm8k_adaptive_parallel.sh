@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=eval_gsm8k_adaptive
-#SBATCH --time=2:00:00
+#SBATCH --time=3:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
