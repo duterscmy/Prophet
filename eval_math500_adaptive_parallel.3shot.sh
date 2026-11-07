@@ -10,7 +10,7 @@
 
 source ~/.bashrc
 conda activate ttrl_env
-cd /mnt/fast/nobackup/scratch4weeks/mc03002/prophet
+cd "${TC_APD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
 
@@ -28,5 +28,5 @@ accelerate launch --num_processes 1 eval_llada.auto_thresh.py \
   --num_fewshot ${nshot} \
   --output_path evals_results/adaptive_parallel/math500_adaptive_parallel_len${length}_block${block}_thr${threshold}_nshot${nshot} \
   --log_samples \
-  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=${block},use_adaptive_parallel=true,confidence_threshold=${threshold},min_parallel_tokens=1 \
+  --model_args model_path=${MODEL_PATH:-/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct},gen_length=${length},steps=${length},block_length=${block},decoder=fixed_apd,confidence_threshold=${threshold},min_parallel_tokens=1 \
   &> logs/math500_adaptive_parallel_full_confidence_len${length}_block${block}_thr${threshold}_nshot${nshot}.log

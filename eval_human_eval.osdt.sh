@@ -10,7 +10,7 @@
 
 source ~/.bashrc
 conda activate ttrl_env
-cd /mnt/fast/nobackup/scratch4weeks/mc03002/prophet
+cd "${TC_APD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
 export HF_ALLOW_CODE_EVAL="1"
@@ -24,5 +24,5 @@ accelerate launch eval_llada.py \
   --num_fewshot 0 \
   --log_samples \
   --output_path evals_results/osdt/human_eval-ns0-${length} \
-  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',enable_osdt=true,osdt_threshold_cap=0.80,osdt_epsilon_ratio=0.10,gen_length=256,steps=256,block_length=32 \
+  --model_args model_path=${MODEL_PATH:-/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct},enable_osdt=true,osdt_threshold_cap=0.80,osdt_epsilon_ratio=0.10,gen_length=256,steps=256,block_length=32 \
   &> logs/osdt-human_eval_cot_zeroshot-ns0-${length}.log

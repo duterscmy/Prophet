@@ -10,7 +10,7 @@
 
 source ~/.bashrc
 conda activate ttrl_env
-cd /mnt/fast/nobackup/scratch4weeks/mc03002/prophet
+cd "${TC_APD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
 
@@ -38,6 +38,6 @@ for max_threshold in 0.95 0.90 0.85 0.80 0.75 0.70; do
     --num_fewshot 0 \
     --output_path evals_results/auto_thresh/math500_dynamic_from_math_c${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold} \
     --log_samples \
-    --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=${block},use_dynamic_threshold=true,dynamic_threshold_json=${threshold_json},max_threshold=${max_threshold},min_threshold=${min_threshold},default_threshold=${default_threshold},min_parallel_tokens=1 \
+    --model_args model_path=${MODEL_PATH:-/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct},gen_length=${length},steps=${length},block_length=${block},decoder=tc_apd,dynamic_threshold_json=${threshold_json},max_threshold=${max_threshold},min_threshold=${min_threshold},default_threshold=${default_threshold},min_parallel_tokens=1 \
     &> logs/math500_dynamic_from_math_c${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold}.log
 done

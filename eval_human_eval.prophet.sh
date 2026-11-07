@@ -10,7 +10,7 @@
 
 source ~/.bashrc
 conda activate ttrl_env
-cd /mnt/fast/nobackup/scratch4weeks/mc03002/prophet
+cd "${TC_APD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
 export CUDA_VISIBLE_DEVICES=0
@@ -24,5 +24,5 @@ accelerate launch eval_llada.py \
   --model llada_dist \
   --log_samples \
   --output_path evals_results/prophet/humaneval-ns0-${length} \
-  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',constraints_text="100:return",enable_early_exit=true,gen_length=256,steps=256,block_length=32,answer_length=5 \
+  --model_args model_path=${MODEL_PATH:-/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct},constraints_text="100:return",enable_early_exit=true,gen_length=256,steps=256,block_length=32,answer_length=5 \
   &> logs/prophet-humaneval-ns0-${length}.log

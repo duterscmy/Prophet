@@ -10,7 +10,7 @@
 
 source ~/.bashrc
 conda activate ttrl_env
-cd /mnt/fast/nobackup/scratch4weeks/mc03002/prophet
+cd "${TC_APD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
 
@@ -38,6 +38,6 @@ for name in "global_v2" "gsm8k_train" "math_train" "ace_train"; do
     --num_fewshot 0 \
     --output_path evals_results/auto_thresh/wmt_de_en_dynamic_from_${name}_c${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold} \
     --log_samples \
-    --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',gen_length=${length},steps=${length},block_length=${block},use_dynamic_threshold=true,dynamic_threshold_json=${threshold_json},max_threshold=${max_threshold},min_threshold=${min_threshold},default_threshold=${default_threshold},min_parallel_tokens=1 \
+    --model_args model_path=${MODEL_PATH:-/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct},gen_length=${length},steps=${length},block_length=${block},decoder=tc_apd,dynamic_threshold_json=${threshold_json},max_threshold=${max_threshold},min_threshold=${min_threshold},default_threshold=${default_threshold},min_parallel_tokens=1 \
     &> logs/wmt_de_en_dynamic_from_${name}_c${correct_ratio}_mincount${min_count}_minaccepted${min_accepted}_len${length}_block${block}_maxthr${max_threshold}_minthr${min_threshold}.log
 done

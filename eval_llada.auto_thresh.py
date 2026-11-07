@@ -1,10 +1,7 @@
-'''LLaDA evaluation harness with adaptive parallel / token-threshold decoding support.'''
+"""lm-eval adapter for standard decoding, fixed APD, and TC-APD."""
 
 import accelerate
 import torch
-import re
-import json
-from pathlib import Path
 import random
 import numpy as np
 import torch.nn.functional as F
@@ -14,9 +11,9 @@ from lm_eval.api.instance import Instance
 from lm_eval.api.model import LM
 from lm_eval.api.registry import register_model
 from tqdm import tqdm
-import os
 
 from transformers import AutoTokenizer, AutoModel
+from tc_apd import DecodeConfig, TokenThresholdTable, decode
 
 
 def _parse_constraints(text: str, tokenizer) -> dict[int, int]:
@@ -26,11 +23,11 @@ def _parse_constraints(text: str, tokenizer) -> dict[int, int]:
     if text is None or text.strip() == "":
         return constraints
 
-    for part in text.split('|'):
-        if ':' not in part:
+    for part in text.split("|"):
+        if ":" not in part:
             continue
 
-        pos_str, word = part.split(':', 1)
+        pos_str, word = part.split(":", 1)
 
         try:
             pos = int(pos_str.strip())
@@ -60,21 +57,22 @@ def set_seed(seed):
 class LLaDAEvalHarness(LM):
     def __init__(
         self,
-        model_path='',
+        model_path="",
         mask_id=126336,
         max_length=4096,
         batch_size=32,
         mc_num=128,
         is_check_greedy=True,
-        cfg=0.,
+        cfg=0.0,
         steps=1024,
         gen_length=1024,
         block_length=1024,
-        remasking='low_confidence',
+        temperature=0.0,
+        remasking="low_confidence",
         device="cuda",
         **kwargs,
     ):
-        '''Initialize LLaDA evaluation harness.'''
+        """Initialize LLaDA evaluation harness."""
         super().__init__()
 
         accelerator = accelerate.Accelerator()
@@ -87,7 +85,7 @@ class LLaDAEvalHarness(LM):
         model_kwargs = {}
 
         if self.accelerator is not None:
-            model_kwargs.update({'device_map': {'': f'{self.accelerator.device}'}})
+            model_kwargs.update({"device_map": {"": f"{self.accelerator.device}"}})
 
         self.model = AutoModel.from_pretrained(
             model_path,
@@ -101,7 +99,7 @@ class LLaDAEvalHarness(LM):
 
         if self.accelerator is not None:
             self.model = self.accelerator.prepare(self.model)
-            self.device = torch.device(f'{self.accelerator.device}')
+            self.device = torch.device(f"{self.accelerator.device}")
             self._rank = self.accelerator.local_process_index
             self._world_size = self.accelerator.num_processes
         else:
@@ -119,7 +117,7 @@ class LLaDAEvalHarness(LM):
         self.batch_size = int(batch_size)
         assert mc_num % self.batch_size == 0
 
-        self.sampling_eps = 0.
+        self.sampling_eps = 0.0
         self.max_length = max_length
         self.is_check_greedy = is_check_greedy
 
@@ -127,6 +125,7 @@ class LLaDAEvalHarness(LM):
         self.steps = steps
         self.gen_length = gen_length
         self.block_length = block_length
+        self.temperature = float(temperature)
         self.remasking = remasking
 
         # ============================================================
@@ -134,48 +133,97 @@ class LLaDAEvalHarness(LM):
         # ============================================================
 
         self.print_detail_log = self._as_bool(
-            kwargs.pop('print_detail_log ', False)
+            kwargs.pop(
+                "print_detail_log",
+                kwargs.pop("print_detail_log ", True),
+            )
         )
-        print(f"print_detail_log: {self.print_detail_log}")
 
         # 1. Whether to use adaptive parallel decoding.
         self.use_adaptive_parallel = self._as_bool(
-            kwargs.pop('use_adaptive_parallel', False)
+            kwargs.pop("use_adaptive_parallel", False)
         )
 
         # 2. Whether to use token-wise dynamic threshold decoding.
         # If True, this has priority over use_adaptive_parallel.
         self.use_dynamic_threshold = self._as_bool(
-            kwargs.pop('use_dynamic_threshold', False)
+            kwargs.pop("use_dynamic_threshold", False)
         )
+
+        requested_decoder = str(kwargs.pop("decoder", "")).strip().lower()
+        aliases = {
+            "": "",
+            "standard": "standard",
+            "baseline": "standard",
+            "fixed": "fixed_apd",
+            "fixed_apd": "fixed_apd",
+            "adaptive_parallel": "fixed_apd",
+            "tc_apd": "tc_apd",
+            "token_threshold": "tc_apd",
+        }
+        if requested_decoder not in aliases:
+            raise ValueError(
+                f"Unsupported decoder={requested_decoder!r}; expected "
+                "standard, fixed_apd, or tc_apd"
+            )
+        if requested_decoder:
+            self.decoder = aliases[requested_decoder]
+        elif self.use_dynamic_threshold:
+            self.decoder = "tc_apd"
+        elif self.use_adaptive_parallel:
+            self.decoder = "fixed_apd"
+        else:
+            self.decoder = "standard"
+
+        # Keep the legacy flags synchronized for old integration branches.
+        self.use_dynamic_threshold = self.decoder == "tc_apd"
+        self.use_adaptive_parallel = self.decoder == "fixed_apd"
 
         # 3. Token threshold JSON path.
         # Expected JSON format:
         #   {"123": 0.85, "456": 0.92}
-        self.dynamic_threshold_json = kwargs.pop('dynamic_threshold_json', '')
+        self.dynamic_threshold_json = kwargs.pop(
+            "threshold_path",
+            kwargs.pop("dynamic_threshold_json", ""),
+        )
 
         # Token-wise threshold args.
-        self.max_threshold = float(kwargs.pop('max_threshold', 0.9))
-        self.min_threshold = float(kwargs.pop('min_threshold', 0.02))
-        self.default_threshold = float(kwargs.pop('default_threshold', 0.9))
+        self.max_threshold = float(kwargs.pop("max_threshold", 0.9))
+        self.min_threshold = float(kwargs.pop("min_threshold", 0.02))
+        raw_default_threshold = kwargs.pop("default_threshold", None)
+        self.default_threshold = (
+            0.9 if raw_default_threshold is None else float(raw_default_threshold)
+        )
 
         # Adaptive parallel args.
-        self.confidence_threshold = float(kwargs.pop('confidence_threshold', 0.9))
-        self.min_parallel_tokens = int(kwargs.pop('min_parallel_tokens', 1))
-        self.max_parallel_tokens = int(kwargs.pop('max_parallel_tokens', 100))
+        self.confidence_threshold = float(kwargs.pop("confidence_threshold", 0.9))
+        self.min_parallel_tokens = int(kwargs.pop("min_parallel_tokens", 1))
+        self.max_parallel_tokens = int(kwargs.pop("max_parallel_tokens", 100))
 
         # Optional constraints, mainly for baseline generate.
-        self.constraints_text = kwargs.pop('constraints_text', '')
+        self.constraints_text = kwargs.pop("constraints_text", "")
 
-        # Load dynamic threshold dict once at initialization.
-        self.dynamic_threshold_dict = self._load_threshold_dict(
-            self.dynamic_threshold_json
+        self.threshold_table = None
+        self.dynamic_threshold_dict = {}
+        if self.decoder == "tc_apd":
+            if not str(self.dynamic_threshold_json).strip():
+                raise ValueError("decoder=tc_apd requires dynamic_threshold_json")
+            self.threshold_table = TokenThresholdTable.load(
+                self.dynamic_threshold_json,
+                default_threshold=(
+                    None if raw_default_threshold is None else self.default_threshold
+                ),
+            )
+            self.default_threshold = self.threshold_table.default_threshold
+            self.dynamic_threshold_dict = dict(self.threshold_table.thresholds)
+        self.enable_stagger_aware = self._as_bool(
+            kwargs.pop("enable_stagger_aware", False)
         )
-        self.enable_stagger_aware = self._as_bool(kwargs.pop('enable_stagger_aware', False))
-        self.enable_soar = self._as_bool(kwargs.pop('enable_soar', False))
-        self.max_beam_size = int(kwargs.pop('max_beam_size', 2))
+        self.enable_soar = self._as_bool(kwargs.pop("enable_soar", False))
+        self.max_beam_size = int(kwargs.pop("max_beam_size", 2))
         if self.rank == 0:
             print("====== LLaDA Harness Decoding Config ======")
+            print(f"decoder: {self.decoder}")
             print(f"use_dynamic_threshold: {self.use_dynamic_threshold}")
             print(f"use_adaptive_parallel: {self.use_adaptive_parallel}")
             print(f"dynamic_threshold_json: {self.dynamic_threshold_json}")
@@ -186,13 +234,9 @@ class LLaDAEvalHarness(LM):
             print(f"confidence_threshold: {self.confidence_threshold}")
             print(f"min_parallel_tokens: {self.min_parallel_tokens}")
             print(f"max_parallel_tokens: {self.max_parallel_tokens}")
+            print(f"temperature: {self.temperature}")
+            print(f"print_detail_log: {self.print_detail_log}")
             print("==========================================")
-
-        if self.use_dynamic_threshold and len(self.dynamic_threshold_dict) == 0:
-            print(
-                "[WARN] use_dynamic_threshold=True but no threshold dict loaded. "
-                "All tokens will fallback to default_threshold."
-            )
 
     def _as_bool(self, v, default=False):
         if isinstance(v, bool):
@@ -204,45 +248,6 @@ class LLaDAEvalHarness(LM):
         s = str(v).strip().strip("'\"").lower()
         return s in ("1", "true", "yes", "y", "t")
 
-    def _load_threshold_dict(self, json_path):
-        """
-        Load token-wise threshold json.
-
-        Expected JSON format:
-            {"123": 0.85, "456": 0.92}
-
-        Return:
-            {123: 0.85, 456: 0.92}
-        """
-        if json_path is None:
-            return {}
-
-        json_path = str(json_path).strip().strip("'\"")
-
-        if json_path == "":
-            return {}
-
-        path = Path(json_path)
-
-        if not path.exists():
-            print(f"[WARN] dynamic_threshold_json not found: {path}")
-            return {}
-
-        with path.open("r", encoding="utf-8") as f:
-            raw = json.load(f)
-
-        threshold_dict = {}
-
-        for k, v in raw.items():
-            try:
-                threshold_dict[int(k)] = float(v)
-            except Exception:
-                continue
-
-        print(f"[INFO] Loaded {len(threshold_dict)} token thresholds from {path}")
-
-        return threshold_dict
-
     @property
     def rank(self):
         return self._rank
@@ -252,17 +257,17 @@ class LLaDAEvalHarness(LM):
         return self._world_size
 
     def _forward_process(self, batch, prompt_index):
-        b, l = batch.shape
+        batch_size, sequence_length = batch.shape
 
-        target_len = (l - prompt_index.sum()).item()
+        target_len = (sequence_length - prompt_index.sum()).item()
 
         k = torch.randint(1, target_len + 1, (), device=batch.device)
 
         x = torch.round(
             torch.linspace(
                 float(k),
-                k + (b - 1) * (target_len / b),
-                steps=b,
+                k + (batch_size - 1) * (target_len / batch_size),
+                steps=batch_size,
                 device=batch.device,
             )
         ).long()
@@ -271,16 +276,16 @@ class LLaDAEvalHarness(LM):
 
         assert x.min() >= 1 and x.max() <= target_len
 
-        indices = torch.arange(target_len, device=batch.device).repeat(b, 1)
+        indices = torch.arange(target_len, device=batch.device).repeat(batch_size, 1)
         is_mask = indices < x.unsqueeze(1)
 
-        for i in range(b):
+        for i in range(batch_size):
             is_mask[i] = is_mask[i][torch.randperm(target_len)]
 
         is_mask = torch.cat(
             (
                 torch.zeros(
-                    b,
+                    batch_size,
                     prompt_index.sum(),
                     dtype=torch.bool,
                     device=batch.device,
@@ -292,11 +297,11 @@ class LLaDAEvalHarness(LM):
 
         noisy_batch = torch.where(is_mask, self.mask_id, batch)
 
-        return noisy_batch, (x / target_len).unsqueeze(1).repeat(1, l)
+        return noisy_batch, (x / target_len).unsqueeze(1).repeat(1, sequence_length)
 
     @torch.no_grad()
     def get_logits(self, batch, prompt_index):
-        if self.cfg > 0.:
+        if self.cfg > 0.0:
             assert len(prompt_index) == batch.shape[1]
 
             prompt_index = prompt_index.unsqueeze(0).repeat(batch.shape[0], 1)
@@ -308,11 +313,11 @@ class LLaDAEvalHarness(LM):
 
         logits = self.model(batch).logits
 
-        if self.cfg > 0.:
+        if self.cfg > 0.0:
             logits, un_logits = torch.chunk(logits, 2, dim=0)
             logits = un_logits + (self.cfg + 1) * (logits - un_logits)
 
-        return logits[:, :batch.shape[1]]
+        return logits[:, : batch.shape[1]]
 
     @torch.no_grad()
     def get_loglikelihood(self, prefix, target):
@@ -333,7 +338,7 @@ class LLaDAEvalHarness(LM):
                 F.cross_entropy(
                     logits[mask_indices],
                     seq[mask_indices],
-                    reduction='none',
+                    reduction="none",
                 )
                 / p_mask[mask_indices]
             )
@@ -357,10 +362,10 @@ class LLaDAEvalHarness(LM):
         prompt_index = torch.arange(seq.shape[1], device=self.device) < len(prefix)
 
         prefix, target = prefix.to(self.device), target.to(self.device)
-        seq[0, :len(prefix)] = prefix
+        seq[0, : len(prefix)] = prefix
 
         for i in range(len(target)):
-            mask_index = (seq == self.mask_id)
+            mask_index = seq == self.mask_id
 
             logits = self.get_logits(seq, prompt_index)[mask_index]
             x0 = torch.argmax(logits, dim=-1)
@@ -377,7 +382,7 @@ class LLaDAEvalHarness(LM):
             x0[index[1:]] = self.mask_id
             seq[mask_index] = x0.clone()
 
-        correct = target == seq[0, len(prefix):]
+        correct = target == seq[0, len(prefix) :]
         correct = torch.all(correct)
 
         return correct
@@ -436,7 +441,7 @@ class LLaDAEvalHarness(LM):
 
     def loglikelihood_rolling(self, requests):
         raise NotImplementedError
-    
+
     def generate_until(self, requests: list[Instance]):
         """
         Memory-friendly generate_until.
@@ -454,11 +459,14 @@ class LLaDAEvalHarness(LM):
 
         for req_idx, req in enumerate(tqdm(requests, desc="Generating...")):
             question_text = req.args[0]
-            stop_tokens = req.args[1]["until"]
+            request_kwargs = req.args[1] if len(req.args) > 1 else {}
+            stop_tokens = request_kwargs.get("until", []) or []
 
             # Tokenize one request at a time to avoid Dataset/Arrow memory overhead.
             input_ids = self.tokenizer(question_text)["input_ids"]
-            prompt = torch.tensor(input_ids, dtype=torch.long, device=self.device).unsqueeze(0)
+            prompt = torch.tensor(
+                input_ids, dtype=torch.long, device=self.device
+            ).unsqueeze(0)
 
             constraints = (
                 _parse_constraints(self.constraints_text, self.tokenizer)
@@ -473,112 +481,80 @@ class LLaDAEvalHarness(LM):
             # 3. Baseline decoding
             # ============================================================
 
-            if self.use_dynamic_threshold:
-                if self.enable_stagger_aware:
-                    print("[INFO] Using stagger-aware dynamic token-wise threshold decoding...")
-                    from generate import generate_token_threshold_parallel_straggler_aware
-                    generated_out = generate_token_threshold_parallel_straggler_aware(
-                        self.model,
-                        prompt,
-                        threshold_dict=self.dynamic_threshold_dict,
-                        steps=self.steps,
-                        gen_length=self.gen_length,
-                        block_length=self.block_length,
-                        temperature=0,
-                        cfg_scale=self.cfg,
-                        remasking=self.remasking,
-                        mask_id=self.mask_id,
-                        log=False,
-                        max_threshold=self.max_threshold,
-                        min_threshold=self.min_threshold,
-                        default_threshold=self.default_threshold,
-                        min_parallel_tokens=self.min_parallel_tokens,
-                        max_parallel_tokens=self.max_parallel_tokens,
-                    )
-                elif self.enable_soar:
-                    print("[INFO] Using SOAR dynamic token-wise threshold decoding...")
-                    from generate import generate_soar_token_threshold
-                    generated_out = generate_soar_token_threshold(
-                        self.model,
-                        prompt,
-                        threshold_dict=self.dynamic_threshold_dict,
-                        steps=self.steps,
-                        gen_length=self.gen_length,
-                        block_length=self.block_length,
-                        temperature=0,
-                        cfg_scale=self.cfg,
-                        remasking=self.remasking,
-                        mask_id=self.mask_id,
-                        log=False,
-                        max_threshold=self.max_threshold,
-                        min_threshold=self.min_threshold,
-                        default_threshold=self.default_threshold,
-                        min_parallel_tokens=self.min_parallel_tokens,
-                        max_parallel_tokens=self.max_parallel_tokens,
-                        max_beam_size=self.max_beam_size,
-                    )
-                else:
-                    print("[INFO] Using dynamic token-wise threshold decoding...")
-                    from generate import generate_token_threshold_parallel_full_confidence
-                    generated_out = generate_token_threshold_parallel_full_confidence(
-                        self.model,
-                        prompt,
-                        threshold_dict=self.dynamic_threshold_dict,
-                        steps=self.steps,
-                        gen_length=self.gen_length,
-                        block_length=self.block_length,
-                        temperature=0,
-                        cfg_scale=self.cfg,
-                        remasking=self.remasking,
-                        mask_id=self.mask_id,
-                        log=False,
-                        max_threshold=self.max_threshold,
-                        min_threshold=self.min_threshold,
-                        default_threshold=self.default_threshold,
-                        min_parallel_tokens=self.min_parallel_tokens,
-                        max_parallel_tokens=self.max_parallel_tokens,
-                    )
+            if self.decoder == "tc_apd" and self.enable_stagger_aware:
+                print("[INFO] Using stagger-aware TC-APD...")
+                from generate import generate_token_threshold_parallel_straggler_aware
 
-            elif self.use_adaptive_parallel:
-                print("[INFO] Using adaptive parallel decoding with confidence threshold "
-                      f"{self.confidence_threshold}...")
-                from generate import generate_adaptive_parallel_full_confidence
-                generated_out = generate_adaptive_parallel_full_confidence(
+                generated_out = generate_token_threshold_parallel_straggler_aware(
                     self.model,
                     prompt,
+                    threshold_dict=self.dynamic_threshold_dict,
                     steps=self.steps,
                     gen_length=self.gen_length,
                     block_length=self.block_length,
-                    temperature=0,
+                    temperature=self.temperature,
                     cfg_scale=self.cfg,
                     remasking=self.remasking,
                     mask_id=self.mask_id,
                     log=False,
-                    confidence_threshold=self.confidence_threshold,
+                    max_threshold=self.max_threshold,
+                    min_threshold=self.min_threshold,
+                    default_threshold=self.default_threshold,
                     min_parallel_tokens=self.min_parallel_tokens,
                     max_parallel_tokens=self.max_parallel_tokens,
-                    print_all_token_records=True
                 )
+            elif self.decoder == "tc_apd" and self.enable_soar:
+                print("[INFO] Using SOAR with TC-APD thresholds...")
+                from generate import generate_soar_token_threshold
 
-            else:
-                print("[INFO] Using baseline decoding with full confidence logging...")
-                from generate import generate_full_confidence
-                generated_out = generate_full_confidence(
+                generated_out = generate_soar_token_threshold(
                     self.model,
                     prompt,
+                    threshold_dict=self.dynamic_threshold_dict,
                     steps=self.steps,
                     gen_length=self.gen_length,
                     block_length=self.block_length,
-                    temperature=0,
+                    temperature=self.temperature,
                     cfg_scale=self.cfg,
                     remasking=self.remasking,
                     mask_id=self.mask_id,
-                    print_all_token_records=True,
+                    log=False,
+                    max_threshold=self.max_threshold,
+                    min_threshold=self.min_threshold,
+                    default_threshold=self.default_threshold,
+                    min_parallel_tokens=self.min_parallel_tokens,
+                    max_parallel_tokens=self.max_parallel_tokens,
+                    max_beam_size=self.max_beam_size,
                 )
-
+            else:
+                result = decode(
+                    self.model,
+                    prompt,
+                    DecodeConfig(
+                        mode=self.decoder,
+                        steps=self.steps,
+                        gen_length=self.gen_length,
+                        block_length=self.block_length,
+                        temperature=self.temperature,
+                        cfg_scale=self.cfg,
+                        remasking=self.remasking,
+                        mask_id=self.mask_id,
+                        confidence_threshold=self.confidence_threshold,
+                        default_threshold=self.default_threshold,
+                        min_threshold=self.min_threshold,
+                        max_threshold=self.max_threshold,
+                        min_parallel_tokens=self.min_parallel_tokens,
+                        max_parallel_tokens=self.max_parallel_tokens,
+                        collect_traces=self.print_detail_log,
+                    ),
+                    threshold_table=self.threshold_table,
+                    constraints=constraints,
+                )
+                generated_out = result.sequences
+                result.print_report(include_traces=self.print_detail_log)
 
             generated_answer = self.tokenizer.decode(
-                generated_out[0][prompt.shape[1]:],
+                generated_out[0][prompt.shape[1] :],
                 skip_special_tokens=False,
             )
 
@@ -605,7 +581,6 @@ class LLaDAEvalHarness(LM):
                 self.accelerator.wait_for_everyone()
 
         return out
-
 
 
 if __name__ == "__main__":

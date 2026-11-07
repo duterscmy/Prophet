@@ -10,7 +10,7 @@
 
 source ~/.bashrc
 conda activate ttrl_env
-cd /mnt/fast/nobackup/scratch4weeks/mc03002/prophet
+cd "${TC_APD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_DATASETS_OFFLINE=0
 export CUDA_VISIBLE_DEVICES=0
@@ -24,5 +24,5 @@ accelerate launch eval_llada.py \
   --num_fewshot 0 \
   --log_samples \
   --output_path evals_results/soar/gsm8k_cot_zeroshot-ns0-${length}\
-  --model_args model_path='/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct',enable_early_exit=false,enable_soar=true,gen_length=${length},steps=${length},block_length=32 \
+  --model_args model_path=${MODEL_PATH:-/mnt/fast/nobackup/scratch4weeks/mc03002/models/LLaDA-8B-Instruct},enable_early_exit=false,enable_soar=true,gen_length=${length},steps=${length},block_length=32 \
   &> logs/soar-gsm8k_cot_zeroshot-ns0-${length}.log
