@@ -279,13 +279,16 @@ def main() -> None:
             sorted(per_run, key=lambda r: (r["calibration_size"], r["seed"], r["benchmark"]))
         )
 
+    missing_path = args.output_dir / "missing_runs.csv"
     if missing:
-        with (args.output_dir / "missing_runs.csv").open(
-            "w", encoding="utf-8", newline=""
-        ) as stream:
+        with missing_path.open("w", encoding="utf-8", newline="") as stream:
             writer = csv.DictWriter(stream, fieldnames=list(missing[0]))
             writer.writeheader()
             writer.writerows(missing)
+    elif missing_path.exists():
+        # Every setting is complete now; drop the stale report from an
+        # earlier in-flight run so the directory cannot be misread.
+        missing_path.unlink()
 
     # ---- the requested wide table -------------------------------------
     columns = [

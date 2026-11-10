@@ -50,19 +50,25 @@ in `iclr27_rebuttal_leonardo/analysis/`. **Add the paper's section/table pointer
 (e.g. "Table 6" / "Appendix C") so the reviewer can find it, or soften to "is
 straightforward to compose with" if the paper does not report it.
 
-## 5. Multi-seed table to be extended
+## 5. Multi-seed table (complete)
 
-The reply reports three-subset `Mean ± Std` for calibration sizes **100 and 500**
-only, which are complete across all three benchmarks. Sizes 200/1,000/2,000/5,000
-are complete for MATH500 and HumanEval; their GSM8K seed-2028/2029 runs are in
-Slurm array `64033383`. A watcher regenerates
-`analysis/multisize_seed_sensitivity/` automatically when the array finishes —
-after that, the full six-size table can replace the two-size table in the reply
-and go into the appendix.
+Slurm array `64033383` finished: all eight GSM8K seed-2028/2029 runs COMPLETED,
+and `analysis/multisize_seed_sensitivity/` now joins **54 of 54** runs with no
+gaps (the analyzer was re-run without `--allow-missing`, so it would have failed
+on any incomplete setting). The reply reports the full six-size `Mean ± Std`
+table.
+
+One consequence worth keeping in the paper: the subset-to-subset spread at a
+fixed size (up to ±1.0 pp average accuracy) is as large as the difference between
+sizes, so the apparent dip at 200 trajectories in the single-seed table is mostly
+sampling noise. The reply now says this explicitly, which is both more honest and
+a stronger answer to iRo1 than defending a non-monotone accuracy curve. Average
+NFE, by contrast, is reproducible to 1–2% and decreases steadily from 500 upward.
 
 Do **not** present size 5,000 as evidence of sampling robustness: the trajectory
 pool is itself 5,000, so the three subsets coincide and the tables are identical
-(Jaccard 100%, |Δτ| = 0). The report flags this automatically.
+(Jaccard 100%, |Δτ| = 0, standard deviation 0 by construction). The generated
+report flags this automatically.
 
 ## 6. Deliberately missing runs — do not resubmit
 

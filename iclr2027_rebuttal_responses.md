@@ -168,9 +168,11 @@ Three observations. First, **100 trajectories already match the
 fixed-threshold baseline in average accuracy while needing substantially fewer
 forward calls** (71.65 vs. 94.19 NFE). Second, more data mainly buys speed, not
 accuracy: NFE falls monotonically from 71.65 to 69.13 as the table grows from 100
-to 5,000 entries. Third, small tables do fluctuate in quality — 200 trajectories
-dip slightly — and the accuracy/speed trade-off becomes stable from 500 upward.
-Accuracy is not monotone in calibration size, and we no longer suggest otherwise.
+to 5,000 entries. Third, in this single-subset view small tables appear to
+fluctuate in quality — 200 trajectories dip slightly — with the trade-off
+stabilizing from 500 upward; the multi-subset study below shows that most of this
+fluctuation is calibration-subset noise. Accuracy is not monotone in calibration
+size, and we no longer suggest otherwise.
 
 Why 500 trajectories nearly match 5,000 is explained by token frequency. On the
 21.1M intermediate candidate records of the 5,000-trajectory pool:
@@ -188,22 +190,41 @@ differ by 0.103 on average, so we describe the small table as a *compact
 high-frequency approximation* rather than a reconstruction of the large one.
 
 Because "robustness" also means insensitivity to *which* trajectories are drawn,
-we added a sampling-robustness study: three independent calibration subsets
-(seeds 2027/2028/2029) per size, each recalibrated and re-evaluated. For the two
-small-data operating points (`Mean ± Std`, sample standard deviation):
+we added a sampling-robustness study: **three independent calibration subsets
+(seeds 2027/2028/2029) at every size**, each recalibrated and re-evaluated on all
+three benchmarks — 54 evaluation runs in total. Reporting `Mean ± Std` (sample
+standard deviation, ddof = 1):
 
-| Size | GSM8K Acc | GSM8K NFE | MATH500 Acc | MATH500 NFE | HumanEval Acc | HumanEval NFE | Avg Acc | Avg NFE |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 100 | 73.24 ± 0.13 | 59.56 ± 0.75 | 31.00 ± 1.25 | 82.16 ± 0.53 | 37.20 ± 1.06 | 71.24 ± 3.10 | 47.14 ± 0.79 | 70.99 ± 1.16 |
-| 500 | 73.14 ± 0.91 | 60.62 ± 1.12 | 31.33 ± 1.33 | 83.45 ± 2.08 | 36.99 ± 0.93 | 69.64 ± 2.14 | 47.15 ± 1.00 | 71.24 ± 0.72 |
+| Calibration size | GSM8K Acc | MATH500 Acc | HumanEval Acc | Avg Acc | Avg NFE |
+|---:|---:|---:|---:|---:|---:|
+| 100 | 73.24 ± 0.13 | 31.00 ± 1.25 | 37.20 ± 1.06 | 47.14 ± 0.79 | 70.99 ± 1.16 |
+| 200 | 72.88 ± 0.49 | 31.33 ± 0.83 | 35.98 ± 0.61 | 46.73 ± 0.47 | 71.41 ± 1.65 |
+| 500 | 73.14 ± 0.91 | 31.33 ± 1.33 | 36.99 ± 0.93 | 47.15 ± 1.00 | 71.24 ± 0.72 |
+| 1,000 | 72.50 ± 0.63 | 31.87 ± 0.64 | 37.20 ± 1.22 | 47.19 ± 0.39 | 70.07 ± 0.39 |
+| 2,000 | 72.76 ± 0.18 | 32.00 ± 0.40 | 36.99 ± 1.27 | 47.25 ± 0.57 | 69.75 ± 0.56 |
+| 5,000 | 73.24 ± 0.00 | 32.20 ± 0.00 | 37.80 ± 0.00 | 47.75 ± 0.00 | 69.14 ± 0.00 |
 
-Efficiency is highly reproducible across subsets (average NFE varies by about
-1–2%), while *which* tokens receive a threshold is much more subset-dependent: the
-three 100-trajectory tables share only 47.1% of their token union (54.7% at 500),
-and thresholds for shared tokens differ by 0.110 on average (0.104 at 500). The
-honest reading is that the aggregate speed/quality operating point is stable at
-small calibration sizes, but individual token thresholds are not yet
-well-determined there.
+This study also **corrects the reading of the single-seed table above**. Average
+accuracy stays in a 46.73–47.75 band across all six sizes, and the
+subset-to-subset spread at a fixed size (up to ±1.0 pp) is as large as the
+difference between sizes. The dip we described at 200 trajectories is therefore
+largely calibration-subset noise rather than a reliable property of that budget,
+and we no longer attribute accuracy differences across sizes to size itself.
+Efficiency behaves differently: average NFE is reproducible to 1–2% within a size
+and decreases steadily with more data from 500 upward (71.24 → 70.07 → 69.75 →
+69.14), so **calibration size buys speed reliably and accuracy only within
+noise**.
+
+At the token level the picture is the one a reviewer should expect from finite
+samples, and it improves monotonically with data: the three 100-trajectory tables
+share only 47.1% of their token union, rising to 54.7% at 500, 59.4% at 1,000 and
+66.2% at 2,000, while thresholds for shared tokens differ by 0.110 on average at
+100 and 0.073 at 2,000. The honest reading is that the aggregate speed/quality
+operating point is stable even at small calibration sizes, but individual token
+thresholds are not yet well-determined there. (At 5,000 the subset equals our
+entire trajectory pool, so the three seeds select the same traces and the standard
+deviation is zero by construction; we do not count that row as evidence of
+sampling robustness.)
 
 ### W2 & Q2 — Out-of-domain evaluation beyond math and code
 
@@ -264,11 +285,13 @@ isotonic regression nor a monotone envelope, and finite-sample *R_v(τ)* is inde
 not guaranteed to be monotone. We have removed any wording implying otherwise.
 
 On sampling noise, we measured it directly with three independent calibration
-subsets per size (details in our reply to iRo1, W1 & Q1):
+subsets at every size, 54 evaluation runs in total (details in our reply to
+iRo1, W1 & Q1):
 
 | Calibration size | Valid thresholds (3 seeds) | Union | 3-way intersection | Jaccard | Mean \|Δτ\| on shared tokens | Shared tokens within 0.05 |
 |---:|---|---:|---:|---:|---:|---:|
 | 100 | 141 / 127 / 142 | 191 | 90 | 47.1% | 0.110 | 26.2% |
+| 200 | 235 / 221 / 230 | 314 | 153 | 48.7% | 0.119 | 27.8% |
 | 500 | 410 / 408 / 439 | 550 | 301 | 54.7% | 0.104 | 32.5% |
 | 1,000 | 619 / 620 / 614 | 791 | 470 | 59.4% | 0.088 | 41.8% |
 | 2,000 | 910 / 916 / 911 | 1,102 | 730 | 66.2% | 0.073 | 51.9% |

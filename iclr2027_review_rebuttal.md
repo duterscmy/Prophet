@@ -72,7 +72,7 @@ whether it generalizes, and whether its offline cost is justified.
 | P0.4 Held-out consistency 验证 | 完成（4000 估计 / 1000 验证） | `heldout_consistency/` |
 | P1.1 最终输出层 distribution shift | 完成 | `standard_tc_apd_shift/` |
 | P1.1b 逐 iteration trajectory audit | 完成（500 条配对 GSM8K 轨迹） | `iteration_trajectory_shift/` |
-| P1.2 Threshold 采样敏感性 | 100/500 完成；200--5000 的 GSM8K seed 2028/2029 在 job 64033383 中 | `threshold_seed_sensitivity/`、`threshold_seed_sensitivity_n500/`、`multisize_seed_sensitivity/` |
+| P1.2 Threshold 采样敏感性 | 完成（100--5000 各三个 subset seed，54/54 个 run） | `threshold_seed_sensitivity/`、`threshold_seed_sensitivity_n500/`、`multisize_seed_sensitivity/` |
 | P1.3 Wilson confidence-bound 规则 | 完成 | `confidence_bound/` |
 | P1.4 Matched-NFE paired bootstrap | 完成 | `matched_compute/` |
 | P2.1 Offline cost 与摊销 | 完成 | `calibration_amortization/` |
