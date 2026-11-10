@@ -1,0 +1,2 @@
+family,result_dir,expected_log,has_aggregate_result,has_log
+configuration_transfer,/leonardo_scratch/large/userexternal/mcao0000/prophet-runs/p22-transfer/results/gsm8k_standard_len512_block32_math_n5000_transfer,/leonardo_scratch/large/userexternal/mcao0000/prophet-runs/p22-transfer/logs/gsm8k/gsm8k_standard_len512_block32_math_n5000_transfer.log,0,1

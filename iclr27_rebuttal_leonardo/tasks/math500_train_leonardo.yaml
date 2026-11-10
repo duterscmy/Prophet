@@ -1,0 +1,11 @@
+include: ../../lm-eval-tasks/minerva_math_algebra.yaml
+task: minerva_math500_train_leonardo
+dataset_path: parquet
+dataset_name: null
+dataset_kwargs:
+  data_files:
+    train: /leonardo_scratch/large/userexternal/mcao0000/huggingface/dataset-repos/math500-train/data/train-00000-of-00001.parquet
+    test: /leonardo_scratch/large/userexternal/mcao0000/huggingface/dataset-repos/math500-train/data/test-00000-of-00001.parquet
+training_split: train
+test_split: train
+num_fewshot: 0

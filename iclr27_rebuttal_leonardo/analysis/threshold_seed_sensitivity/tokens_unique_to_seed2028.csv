@@ -1,0 +1,15 @@
+token_id,token_piece,decoded_text,present_seed2027,threshold_seed2027,total_count_seed2027,accepted_seed2027,present_seed2028,threshold_seed2028,total_count_seed2028,accepted_seed2028,present_seed2029,threshold_seed2029,total_count_seed2029,accepted_seed2029,num_seeds_present,membership,threshold_mean_present,threshold_range_present,min_total_count_present,mean_total_count_present
+3513,)$,)$,False,,204,0,True,0.715,519,229,False,,0,0,1,010,0.715,0.0,519,519.0
+1593,log,log,False,,0,0,True,0.735,511,248,False,,0,0,1,010,0.735,0.0,511,511.0
+16477,circ,circ,False,,0,0,True,0.62,321,117,False,,0,0,1,010,0.62,0.0,321,321.0
+2730,Ġgiven, given,False,,261,0,True,0.385,309,185,False,,284,0,1,010,0.385,0.0,309,309.0
+7765,Ġ(-, (-,False,,0,0,True,0.705,305,204,False,,0,0,1,010,0.705,0.0,305,305.0
+560,Ġcan, can,False,,447,0,True,0.4,296,140,False,,423,0,1,010,0.4,0.0,296,296.0
+3553,(\,(\,False,,0,0,True,0.78,295,160,False,,0,0,1,010,0.78,0.0,295,295.0
+299,Ġd, d,False,,0,0,True,0.435,293,212,False,,0,0,1,010,0.435,0.0,293,293.0
+10420,^\,^\,False,,0,0,True,0.625,292,119,False,,0,0,1,010,0.625,0.0,292,292.0
+482,Ġat, at,False,,200,0,True,0.585,290,122,False,,0,0,1,010,0.585,0.0,290,290.0
+27994,dfrac,dfrac,False,,0,0,True,0.4,251,193,False,,0,0,1,010,0.4,0.0,251,251.0
+409,Ġas, as,False,,277,0,True,0.535,231,120,False,,205,0,1,010,0.535,0.0,231,231.0
+17556,)$.,)$.,False,,0,0,True,0.625,231,122,False,,0,0,1,010,0.625,0.0,231,231.0
+9940,)=,)=,False,,0,0,True,0.735,222,105,False,,0,0,1,010,0.735,0.0,222,222.0

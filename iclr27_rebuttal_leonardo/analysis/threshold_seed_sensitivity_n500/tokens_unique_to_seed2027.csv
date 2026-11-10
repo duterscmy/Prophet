@@ -1,0 +1,46 @@
+token_id,token_piece,decoded_text,present_seed2027,threshold_seed2027,total_count_seed2027,accepted_seed2027,present_seed2028,threshold_seed2028,total_count_seed2028,accepted_seed2028,present_seed2029,threshold_seed2029,total_count_seed2029,accepted_seed2029,num_seeds_present,membership,threshold_mean_present,threshold_range_present,min_total_count_present,mean_total_count_present
+19363,Ġvertex, vertex,True,0.57,1111,148,False,,222,0,False,,347,0,1,100,0.57,0.0,1111,1111.0
+1104,ĠWe, We,True,0.475,1032,208,False,,838,0,False,,981,0,1,100,0.475,0.0,1032,1032.0
+12854,(z,(z,True,0.705,635,154,False,,0,0,False,,0,0,1,100,0.705,0.0,635,635.0
+5623,Ġcenter, center,True,0.715,629,249,False,,0,0,False,,262,0,1,100,0.715,0.0,629,629.0
+22719,Ġinequality, inequality,True,0.63,557,161,False,,475,0,False,,408,0,1,100,0.63,0.0,557,557.0
+52880,Ġcubes, cubes,True,0.675,513,105,False,,0,0,False,,0,0,1,100,0.675,0.0,513,513.0
+2954,ĠLet, Let,True,0.555,492,119,False,,348,0,False,,250,0,1,100,0.555,0.0,492,492.0
+18879,}+,}+,True,0.835,449,121,False,,431,0,False,,0,0,1,100,0.835,0.0,449,449.0
+1853,Ġsame, same,True,0.78,425,134,False,,283,0,False,,303,0,1,100,0.78,0.0,425,425.0
+1733,Ġdifferent, different,True,0.52,410,158,False,,234,0,False,,218,0,1,100,0.52,0.0,410,410.0
+31,@,@,True,0.395,403,312,False,,0,0,False,,0,0,1,100,0.395,0.0,403,403.0
+14185,ĠCalculate, Calculate,True,0.52,387,240,False,,0,0,False,,257,0,1,100,0.52,0.0,387,387.0
+63202,})^,})^,True,0.78,366,157,False,,0,0,False,,0,0,1,100,0.78,0.0,366,366.0
+624,Ġif, if,True,0.505,358,124,False,,283,0,False,,399,0,1,100,0.505,0.0,358,358.0
+48,Q,Q,True,0.58,345,130,False,,282,0,False,,0,0,1,100,0.58,0.0,345,345.0
+15320,ĠAC, AC,True,0.53,344,153,False,,0,0,False,,0,0,1,100,0.53,0.0,344,344.0
+4297,Ġseries, series,True,0.495,340,103,False,,323,0,False,,0,0,1,100,0.495,0.0,340,340.0
+19507,Ġvice, vice,True,0.68,338,109,False,,0,0,False,,0,0,1,100,0.68,0.0,338,338.0
+10118,Ġseconds, seconds,True,0.325,334,275,False,,0,0,False,,0,0,1,100,0.325,0.0,334,334.0
+6714,Ġdegree, degree,True,0.615,332,119,False,,0,0,False,,229,0,1,100,0.615,0.0,332,332.0
+2753,Ġfinal, final,True,0.61,331,157,False,,204,0,False,,0,0,1,100,0.61,0.0,331,331.0
+19273,langle,langle,True,0.4,328,112,False,,0,0,False,,0,0,1,100,0.4,0.0,328,328.0
+59047,(-\,(-\,True,0.76,326,112,False,,301,0,False,,0,0,1,100,0.76,0.0,326,326.0
+4151,Ġthird, third,True,0.755,325,159,False,,218,0,False,,0,0,1,100,0.755,0.0,325,325.0
+5700,Ġfactors, factors,True,0.65,305,105,False,,0,0,False,,0,0,1,100,0.65,0.0,305,305.0
+22616,Ġcoefficients, coefficients,True,0.53,302,103,False,,0,0,False,,260,0,1,100,0.53,0.0,302,302.0
+1661,Ġusing, using,True,0.53,295,154,False,,0,0,False,,0,0,1,100,0.53,0.0,295,295.0
+19031,Ġcoordinates, coordinates,True,0.485,294,206,False,,0,0,False,,200,0,1,100,0.485,0.0,294,294.0
+2824,AD,AD,True,0.495,294,247,False,,0,0,False,,0,0,1,100,0.495,0.0,294,294.0
+27312,Ġdivisor, divisor,True,0.635,294,149,False,,0,0,False,,295,0,1,100,0.635,0.0,294,294.0
+1728,Ġperson, person,True,0.64,284,103,False,,284,0,False,,0,0,1,100,0.64,0.0,284,284.0
+3797,Ġcolor, color,True,0.425,284,128,False,,0,0,False,,0,0,1,100,0.425,0.0,284,284.0
+94575,-president,-president,True,0.575,281,130,False,,0,0,False,,0,0,1,100,0.575,0.0,281,281.0
+644,Ġ}, },True,0.665,269,146,False,,0,0,False,,0,0,1,100,0.665,0.0,269,269.0
+1570,Ġfollow, follow,True,0.505,263,113,False,,214,0,False,,0,0,1,100,0.505,0.0,263,263.0
+113987,Solving,Solving,True,0.545,262,126,False,,277,0,False,,269,0,1,100,0.545,0.0,262,262.0
+76849,Ġexponents, exponents,True,0.575,262,108,False,,0,0,False,,0,0,1,100,0.575,0.0,262,262.0
+442,ĠF, F,True,0.465,253,134,False,,0,0,False,,0,0,1,100,0.465,0.0,253,253.0
+7309,agon,agon,True,0.465,248,186,False,,271,0,False,,0,0,1,100,0.465,0.0,248,248.0
+6973,Ġoperation, operation,True,0.58,243,107,False,,0,0,False,,0,0,1,100,0.58,0.0,243,243.0
+2514,Ġsize, size,True,0.54,217,114,False,,0,0,False,,0,0,1,100,0.54,0.0,217,217.0
+9486,^{\,^{\,True,0.535,214,127,False,,0,0,False,,0,0,1,100,0.535,0.0,214,214.0
+11299,}$$,}$$,True,0.805,205,105,False,,0,0,False,,0,0,1,100,0.805,0.0,205,205.0
+23363,Ġhex, hex,True,0.605,204,112,False,,0,0,False,,0,0,1,100,0.605,0.0,204,204.0
+846,In,In,True,0.55,201,101,False,,0,0,False,,0,0,1,100,0.55,0.0,201,201.0

@@ -1,0 +1,92 @@
+{
+  "bootstrap_repeats": 20000,
+  "seed": 42,
+  "summary": [
+    {
+      "benchmark": "GSM8K",
+      "num_samples": 1319,
+      "fixed_accuracy": 0.7232752084912812,
+      "tc_apd_accuracy": 0.7323730098559514,
+      "tc_minus_fixed_accuracy": 0.009097801364670205,
+      "tc_minus_fixed_accuracy_ci95_low": -0.006823351023502654,
+      "tc_minus_fixed_accuracy_ci95_high": 0.025018953752843062,
+      "fixed_nfe": 56.5352539802881,
+      "tc_apd_nfe": 57.1683093252464,
+      "tc_minus_fixed_nfe": 0.6330553449583017,
+      "tc_minus_fixed_nfe_ci95_low": 0.24334723275208492,
+      "tc_minus_fixed_nfe_ci95_high": 1.0326004548900682,
+      "fixed_seconds_per_item": 2.2946648976497346,
+      "tc_apd_seconds_per_item": 2.307782789992418,
+      "tc_minus_fixed_seconds_per_item": 0.013117892342683861,
+      "tc_minus_fixed_seconds_per_item_ci95_low": -0.002698034495830169,
+      "tc_minus_fixed_seconds_per_item_ci95_high": 0.028794374526156175,
+      "nfe_relative_gap_pct": 1.1135189198199682,
+      "wallclock_relative_gap_pct": 0.570039823718405
+    },
+    {
+      "benchmark": "MATH500",
+      "num_samples": 500,
+      "fixed_accuracy": 0.308,
+      "tc_apd_accuracy": 0.322,
+      "tc_minus_fixed_accuracy": 0.014,
+      "tc_minus_fixed_accuracy_ci95_low": -0.006,
+      "tc_minus_fixed_accuracy_ci95_high": 0.036,
+      "fixed_nfe": 82.27,
+      "tc_apd_nfe": 83.104,
+      "tc_minus_fixed_nfe": 0.834,
+      "tc_minus_fixed_nfe_ci95_low": 0.194,
+      "tc_minus_fixed_nfe_ci95_high": 1.522,
+      "fixed_seconds_per_item": 3.4377442,
+      "tc_apd_seconds_per_item": 3.4452983999999995,
+      "tc_minus_fixed_seconds_per_item": 0.007554200000000013,
+      "tc_minus_fixed_seconds_per_item_ci95_low": -0.018849269999999987,
+      "tc_minus_fixed_seconds_per_item_ci95_high": 0.03490635000000001,
+      "nfe_relative_gap_pct": 1.008622879049915,
+      "wallclock_relative_gap_pct": 0.2195017651060161
+    },
+    {
+      "benchmark": "HumanEval",
+      "num_samples": 164,
+      "fixed_accuracy": 0.3719512195121951,
+      "tc_apd_accuracy": 0.3780487804878049,
+      "tc_minus_fixed_accuracy": 0.006097560975609756,
+      "tc_minus_fixed_accuracy_ci95_low": -0.018292682926829267,
+      "tc_minus_fixed_accuracy_ci95_high": 0.03048780487804878,
+      "fixed_nfe": 69.3780487804878,
+      "tc_apd_nfe": 67.13414634146342,
+      "tc_minus_fixed_nfe": -2.2439024390243905,
+      "tc_minus_fixed_nfe_ci95_low": -5.542835365853659,
+      "tc_minus_fixed_nfe_ci95_high": 0.8536585365853658,
+      "fixed_seconds_per_item": 3.1349024390243905,
+      "tc_apd_seconds_per_item": 3.067009756097561,
+      "tc_minus_fixed_seconds_per_item": -0.06789268292682929,
+      "tc_minus_fixed_seconds_per_item_ci95_low": -0.21083663109756096,
+      "tc_minus_fixed_seconds_per_item_ci95_high": 0.0679722408536584,
+      "nfe_relative_gap_pct": 3.2874754332678098,
+      "wallclock_relative_gap_pct": 2.1894112909315178
+    }
+  ],
+  "transitions": [
+    {
+      "benchmark": "GSM8K",
+      "fixed_correct_tc_correct": 905,
+      "fixed_correct_tc_incorrect": 49,
+      "fixed_incorrect_tc_correct": 61,
+      "fixed_incorrect_tc_incorrect": 304
+    },
+    {
+      "benchmark": "MATH500",
+      "fixed_correct_tc_correct": 143,
+      "fixed_correct_tc_incorrect": 11,
+      "fixed_incorrect_tc_correct": 18,
+      "fixed_incorrect_tc_incorrect": 328
+    },
+    {
+      "benchmark": "HumanEval",
+      "fixed_correct_tc_correct": 59,
+      "fixed_correct_tc_incorrect": 2,
+      "fixed_incorrect_tc_correct": 3,
+      "fixed_incorrect_tc_incorrect": 100
+    }
+  ]
+}

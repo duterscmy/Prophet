@@ -1,0 +1,23 @@
+{
+  "candidate_records_5000_traces": 21120000,
+  "observed_candidate_token_types": 6736,
+  "n500_valid_thresholds": 410,
+  "n5000_valid_thresholds": 1453,
+  "shared_valid_thresholds": 410,
+  "union_valid_thresholds": 1453,
+  "n500_type_recall_of_n5000_pct": 28.217481073640744,
+  "n500_table_retained_in_n5000_pct": 100.0,
+  "table_jaccard": 0.28217481073640743,
+  "n500_candidate_mass_coverage_pct": 92.92741003787879,
+  "n5000_candidate_mass_coverage_pct": 98.21809185606061,
+  "shared_candidate_mass_coverage_pct": 92.92741003787879,
+  "n500_recovered_fraction_of_n5000_candidate_mass_pct": 94.61333271884843,
+  "n500_only_candidate_mass_pct": 0.0,
+  "n5000_only_candidate_mass_pct": 5.2906818181818185,
+  "shared_exact_threshold_agreement_pct": 5.121951219512195,
+  "shared_threshold_within_0.05_pct": 37.80487804878049,
+  "shared_mean_abs_threshold_diff": 0.10282926829268292,
+  "shared_median_abs_threshold_diff": 0.07999999999999996,
+  "shared_p90_abs_threshold_diff": 0.2305000000000001,
+  "shared_spearman_threshold_correlation": 0.45596024518854206
+}

@@ -1,0 +1,25 @@
+token_id,token_piece,decoded_text,present_seed2027,threshold_seed2027,total_count_seed2027,accepted_seed2027,present_seed2028,threshold_seed2028,total_count_seed2028,accepted_seed2028,present_seed2029,threshold_seed2029,total_count_seed2029,accepted_seed2029,num_seeds_present,membership,threshold_mean_present,threshold_range_present,min_total_count_present,mean_total_count_present
+818,Ġwhich, which,False,,262,0,False,,332,0,True,0.59,561,295,1,001,0.59,0.0,561,561.0
+5436,angle,angle,False,,0,0,False,,381,0,True,0.62,447,103,1,001,0.62,0.0,447,447.0
+7324,Next,Next,False,,247,0,False,,290,0,True,0.475,435,305,1,001,0.475,0.0,435,435.0
+8581,Ġunits, units,False,,0,0,False,,0,0,True,0.865,370,130,1,001,0.865,0.0,370,370.0
+5803,Ġnumbers, numbers,False,,0,0,False,,355,0,True,0.59,340,142,1,001,0.59,0.0,340,340.0
+4405,Ġsum, sum,False,,280,0,False,,278,0,True,0.405,322,203,1,001,0.405,0.0,322,322.0
+7684,}.,}.,False,,0,0,False,,0,0,True,0.79,318,136,1,001,0.79,0.0,318,318.0
+6811,]{,]{,False,,0,0,False,,0,0,True,0.49,304,120,1,001,0.49,0.0,304,304.0
+810,Ġone, one,False,,0,0,False,,0,0,True,0.475,283,101,1,001,0.475,0.0,283,283.0
+9349,^{-,^{-,False,,0,0,False,,0,0,True,0.965,279,113,1,001,0.965,0.0,279,279.0
+13125,Ġcalculate, calculate,False,,0,0,False,,0,0,True,0.535,263,124,1,001,0.535,0.0,263,263.0
+21649,^n,^n,False,,0,0,False,,0,0,True,0.37,257,132,1,001,0.37,0.0,257,257.0
+7542,Ġ\[, \[,False,,0,0,False,,0,0,True,0.565,254,160,1,001,0.565,0.0,254,254.0
+2917,Ġpossible, possible,False,,260,0,False,,0,0,True,0.735,250,107,1,001,0.735,0.0,250,250.0
+22475,equiv,equiv,False,,0,0,False,,0,0,True,0.71,248,191,1,001,0.71,0.0,248,248.0
+90690,\[\,\[\,False,,0,0,False,,0,0,True,0.395,243,103,1,001,0.395,0.0,243,243.0
+11554,quad,quad,False,,0,0,False,,0,0,True,0.735,241,164,1,001,0.735,0.0,241,241.0
+2140,Ġz, z,False,,0,0,False,,0,0,True,0.74,227,114,1,001,0.74,0.0,227,227.0
+103098,pmod,pmod,False,,0,0,False,,0,0,True,0.59,224,186,1,001,0.59,0.0,224,224.0
+3678,"},","},",False,,0,0,False,,226,0,True,0.5,224,210,1,001,0.5,0.0,224,224.0
+3942,((,((,False,,0,0,False,,0,0,True,0.52,218,113,1,001,0.52,0.0,218,218.0
+36692,Ġ&\, &\,False,,0,0,False,,0,0,True,0.18,209,202,1,001,0.18,0.0,209,209.0
+58,[,[,False,,0,0,False,,330,0,True,0.425,205,124,1,001,0.425,0.0,205,205.0
+66,c,c,False,,0,0,False,,0,0,True,0.725,202,102,1,001,0.725,0.0,202,202.0

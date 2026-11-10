@@ -1,0 +1,32 @@
+task: wmt16_en_ro_leonardo
+dataset_path: parquet
+dataset_name: null
+dataset_kwargs:
+  data_files:
+    validation: /leonardo_scratch/large/userexternal/mcao0000/huggingface/dataset-repos/wmt16-ro-en/validation.parquet
+    test: /leonardo_scratch/large/userexternal/mcao0000/huggingface/dataset-repos/wmt16-ro-en/test.parquet
+output_type: generate_until
+training_split: null
+validation_split: validation
+fewshot_split: validation
+test_split: test
+num_fewshot: 0
+doc_to_text: 'English phrase: {{translation["en"]}}
+
+  Romanian phrase:'
+doc_to_target: ' {{translation["ro"]}}'
+metric_list:
+  - metric: bleu
+    higher_is_better: true
+  - metric: ter
+    higher_is_better: false
+  - metric: chrf
+    higher_is_better: true
+generation_kwargs:
+  until:
+    - "\n"
+  do_sample: false
+  temperature: 0.0
+repeats: 1
+metadata:
+  version: 1.0

@@ -1,0 +1,88 @@
+# P1.2 Calibration-subset sampling robustness (sizes 100-5000, 3 seeds)
+
+Each calibration size is re-sampled with three independent subset seeds
+(2027 / 2028 / 2029) from the same pool of Math Standard-decoding traces,
+recalibrated, and re-evaluated on all three main benchmarks at
+`gen_length=256, steps=256, block_length=32, max/default threshold=0.90,
+min threshold=0.01`.
+
+`±` is the sample standard deviation across the three subset seeds
+(`ddof=1`). `SpeedUp` is the per-task wall-clock ratio
+`Standard (s/it) / setting (s/it)`; `Avg SpeedUp` averages the three
+per-task ratios. NFE ratios are kept separate in
+`multiseed_per_run.csv` and are never mixed into this column.
+
+| Setting | GSM8K Acc | GSM8K NFE | GSM8K s/it | GSM8K SpeedUp | MATH500 Acc | MATH500 NFE | MATH500 s/it | MATH500 SpeedUp | HumanEval Acc | HumanEval NFE | HumanEval s/it | HumanEval SpeedUp | Avg Acc | Avg NFE | Avg s/it | Avg SpeedUp |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Standard | 73.16 | 256.00 | 10.158 | 1.00 | 31.40 | 256.00 | 10.469 | 1.00 | 37.20 | 256.00 | 11.454 | 1.00 | 47.25 | 256.00 | 10.694 | 1.00 |
+| Fixed threshold 0.90 | 73.09 | 77.62 | 3.112 | 3.26 | 31.80 | 106.27 | 4.393 | 2.38 | 37.20 | 98.67 | 4.450 | 2.57 | 47.36 | 94.19 | 3.985 | 2.74 |
+| Math-100 seed 2027 | 73.31 | 59.71 | 2.404 | 4.23 | 32.40 | 82.38 | 3.421 | 3.06 | 38.41 | 72.87 | 3.305 | 3.47 | 48.04 | 71.65 | 3.043 | 3.58 |
+| Math-100 seed 2028 | 73.09 | 58.74 | 2.368 | 4.29 | 30.00 | 82.54 | 3.435 | 3.05 | 36.59 | 67.66 | 3.082 | 3.72 | 46.56 | 69.65 | 2.962 | 3.68 |
+| Math-100 seed 2029 | 73.31 | 60.23 | 2.428 | 4.18 | 30.60 | 81.56 | 3.396 | 3.08 | 36.59 | 73.19 | 3.322 | 3.45 | 46.83 | 71.66 | 3.049 | 3.57 |
+| Math-100 Mean ± Std | 73.24 ± 0.13 | 59.56 ± 0.75 | 2.400 ± 0.030 | 4.23 ± 0.05 | 31.00 ± 1.25 | 82.16 ± 0.53 | 3.417 ± 0.020 | 3.06 ± 0.02 | 37.20 ± 1.06 | 71.24 ± 3.10 | 3.236 ± 0.134 | 3.54 ± 0.15 | 47.14 ± 0.79 | 70.99 ± 1.16 | 3.018 ± 0.049 | 3.61 ± 0.06 |
+| Math-200 seed 2027 | 73.39 | 61.79 | 2.495 | 4.07 | 31.60 | 85.80 | 3.570 | 2.93 | 36.59 | 72.35 | 3.302 | 3.47 | 47.19 | 73.31 | 3.122 | 3.49 |
+| Math-200 seed 2028 | n/a | n/a | n/a | n/a | 30.40 | 82.49 | 3.427 | 3.05 | 35.98 | 69.36 | 3.147 | 3.64 | n/a | n/a | n/a | n/a |
+| Math-200 seed 2029 | n/a | n/a | n/a | n/a | 32.00 | 82.54 | 3.445 | 3.04 | 35.37 | 68.30 | 3.106 | 3.69 | n/a | n/a | n/a | n/a |
+| Math-200 Mean ± Std | 73.39 (1 seed) | 61.79 (1 seed) | 2.495 (1 seed) | 4.07 (1 seed) | 31.33 ± 0.83 | 83.61 ± 1.90 | 3.481 ± 0.078 | 3.01 ± 0.07 | 35.98 ± 0.61 | 70.00 ± 2.10 | 3.185 ± 0.103 | 3.60 ± 0.11 | 47.19 (1 seed) | 73.31 (1 seed) | 3.122 (1 seed) | 3.49 (1 seed) |
+| Math-500 seed 2027 | 74.07 | 60.77 | 2.438 | 4.17 | 32.20 | 85.16 | 3.525 | 2.97 | 37.20 | 67.23 | 3.055 | 3.75 | 47.82 | 71.05 | 3.006 | 3.63 |
+| Math-500 seed 2028 | 73.09 | 61.66 | 2.489 | 4.08 | 32.00 | 84.05 | 3.482 | 3.01 | 37.80 | 70.40 | 3.209 | 3.57 | 47.63 | 72.04 | 3.060 | 3.55 |
+| Math-500 seed 2029 | 72.25 | 59.43 | 2.404 | 4.23 | 29.80 | 81.14 | 3.375 | 3.10 | 35.98 | 71.30 | 3.248 | 3.53 | 46.01 | 70.62 | 3.009 | 3.62 |
+| Math-500 Mean ± Std | 73.14 ± 0.91 | 60.62 ± 1.12 | 2.444 ± 0.043 | 4.16 ± 0.07 | 31.33 ± 1.33 | 83.45 ± 2.08 | 3.461 ± 0.077 | 3.03 ± 0.07 | 36.99 ± 0.93 | 69.64 ± 2.14 | 3.170 ± 0.102 | 3.62 ± 0.12 | 47.15 ± 1.00 | 71.24 ± 0.72 | 3.025 ± 0.030 | 3.60 ± 0.04 |
+| Math-1000 seed 2027 | 72.71 | 58.80 | 2.377 | 4.27 | 31.60 | 83.83 | 3.489 | 3.00 | 38.41 | 68.51 | 3.118 | 3.67 | 47.57 | 70.38 | 2.995 | 3.65 |
+| Math-1000 seed 2028 | n/a | n/a | n/a | n/a | 31.40 | 83.72 | 3.471 | 3.02 | 37.20 | 68.42 | 3.133 | 3.66 | n/a | n/a | n/a | n/a |
+| Math-1000 seed 2029 | n/a | n/a | n/a | n/a | 32.60 | 82.17 | 3.421 | 3.06 | 35.98 | 69.27 | 3.152 | 3.63 | n/a | n/a | n/a | n/a |
+| Math-1000 Mean ± Std | 72.71 (1 seed) | 58.80 (1 seed) | 2.377 (1 seed) | 4.27 (1 seed) | 31.87 ± 0.64 | 83.24 ± 0.93 | 3.460 ± 0.035 | 3.03 ± 0.03 | 37.20 ± 1.22 | 68.73 ± 0.47 | 3.134 ± 0.017 | 3.65 ± 0.02 | 47.57 (1 seed) | 70.38 (1 seed) | 2.995 (1 seed) | 3.65 (1 seed) |
+| Math-2000 seed 2027 | 72.86 | 58.92 | 2.380 | 4.27 | 31.60 | 83.56 | 3.492 | 3.00 | 35.98 | 68.62 | 3.105 | 3.69 | 46.81 | 70.37 | 2.992 | 3.65 |
+| Math-2000 seed 2028 | n/a | n/a | n/a | n/a | 32.40 | 82.75 | 3.423 | 3.06 | 38.41 | 67.71 | 3.107 | 3.69 | n/a | n/a | n/a | n/a |
+| Math-2000 seed 2029 | n/a | n/a | n/a | n/a | 32.00 | 82.83 | 3.462 | 3.02 | 36.59 | 68.34 | 3.101 | 3.69 | n/a | n/a | n/a | n/a |
+| Math-2000 Mean ± Std | 72.86 (1 seed) | 58.92 (1 seed) | 2.380 (1 seed) | 4.27 (1 seed) | 32.00 ± 0.40 | 83.05 ± 0.45 | 3.459 ± 0.035 | 3.03 ± 0.03 | 36.99 ± 1.27 | 68.22 ± 0.47 | 3.104 ± 0.003 | 3.69 ± 0.00 | 46.81 (1 seed) | 70.37 (1 seed) | 2.992 (1 seed) | 3.65 (1 seed) |
+| Math-5000 seed 2027 | 73.24 | 57.17 | 2.308 | 4.40 | 32.20 | 83.10 | 3.445 | 3.04 | 37.80 | 67.13 | 3.067 | 3.73 | 47.75 | 69.14 | 2.940 | 3.72 |
+| Math-5000 seed 2028 | n/a | n/a | n/a | n/a | 32.20 | 83.10 | 3.456 | 3.03 | 37.80 | 67.13 | 3.074 | 3.73 | n/a | n/a | n/a | n/a |
+| Math-5000 seed 2029 | n/a | n/a | n/a | n/a | 32.20 | 83.10 | 3.445 | 3.04 | 37.80 | 67.13 | 3.047 | 3.76 | n/a | n/a | n/a | n/a |
+| Math-5000 Mean ± Std | 73.24 (1 seed) | 57.17 (1 seed) | 2.308 (1 seed) | 4.40 (1 seed) | 32.20 ± 0.00 | 83.10 ± 0.00 | 3.449 ± 0.007 | 3.04 ± 0.01 | 37.80 ± 0.00 | 67.13 ± 0.00 | 3.062 ± 0.014 | 3.74 ± 0.02 | 47.75 (1 seed) | 69.14 (1 seed) | 2.940 (1 seed) | 3.72 (1 seed) |
+
+## Threshold-table stability across subset seeds
+
+| Size | Valid thresholds (2027 / 2028 / 2029) | Union | Intersection | Jaccard | Pairwise mean \|Δτ\| | Pairwise within 0.05 |
+|---:|---|---:|---:|---:|---:|---:|
+| 100 | 141 / 127 / 142 | 191 | 90 | 47.12% | 0.110 | 26.2% |
+| 200 | 235 / 221 / 230 | 314 | 153 | 48.73% | 0.119 | 27.8% |
+| 500 | 410 / 408 / 439 | 550 | 301 | 54.73% | 0.104 | 32.5% |
+| 1000 | 619 / 620 / 614 | 791 | 470 | 59.42% | 0.088 | 41.8% |
+| 2000 | 910 / 916 / 911 | 1102 | 730 | 66.24% | 0.073 | 51.9% |
+| 5000 | 1453 / 1453 / 1453 | 1453 | 1453 | 100.00% | 0.000 | 100.0% |
+
+**Saturated sizes.** At calibration size 5000 the requested subset is as large as the available pool of Math Standard-decoding traces, so the three subset seeds select the same traces and produce byte-identical threshold tables. The rows for those sizes therefore report run-to-run wall-clock jitter under greedy decoding, not calibration-subset sampling variability, and must not be presented as evidence that larger calibration sets are insensitive to subset sampling.
+
+## Incomplete settings (8)
+
+The following size/seed/benchmark runs had no aggregate result or no
+complete decoder statistics when this report was generated; they are
+excluded from the corresponding `Mean ± Std` entries, and the
+`seeds_used` column records how many seeds each row aggregates.
+
+- Math-200 seed 2028 GSM8K
+- Math-200 seed 2029 GSM8K
+- Math-1000 seed 2028 GSM8K
+- Math-1000 seed 2029 GSM8K
+- Math-2000 seed 2028 GSM8K
+- Math-2000 seed 2029 GSM8K
+- Math-5000 seed 2028 GSM8K
+- Math-5000 seed 2029 GSM8K
+
+## Interpretation boundary
+
+Threshold membership and individual threshold values are sensitive to which
+calibration subset is drawn, while aggregate NFE and wall-clock efficiency are
+considerably more stable. Accuracy differences across subset seeds are within
+the range expected from benchmark sampling noise at these sample sizes and
+should not be read as a monotone effect of calibration size.
+
+## Files
+
+- `multiseed_full_table.csv`: the table above, including the `Mean ± Std` rows.
+- `multiseed_mean_std_statistics.csv`: numeric means and sample standard deviations.
+- `multiseed_per_run.csv`: one row per size/seed/benchmark with result and log paths.
+- `multiseed_threshold_stability.csv`: per-size threshold membership and value agreement.
+- `missing_runs.csv`: settings that were not complete at generation time (if any).
+- `summary.json`: machine-readable dump.

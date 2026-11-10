@@ -70,6 +70,8 @@ class LLaDAEvalHarness(LM):
         temperature=0.0,
         remasking="low_confidence",
         device="cuda",
+        tokenizer_path="",
+        quantized=False,
         **kwargs,
     ):
         """Initialize LLaDA evaluation harness."""
@@ -82,10 +84,16 @@ class LLaDAEvalHarness(LM):
         else:
             self.accelerator = None
 
+        quantized = self._as_bool(quantized)
+        self.device = torch.device(device)
         model_kwargs = {}
 
         if self.accelerator is not None:
             model_kwargs.update({"device_map": {"": f"{self.accelerator.device}"}})
+        elif quantized:
+            # Packed GPTQ modules must be dispatched while loading; moving the
+            # resulting model with model.to(...) is unsupported.
+            model_kwargs.update({"device_map": {"": device}})
 
         self.model = AutoModel.from_pretrained(
             model_path,
@@ -95,21 +103,20 @@ class LLaDAEvalHarness(LM):
         )
         self.model.eval()
 
-        self.device = torch.device(device)
-
         if self.accelerator is not None:
             self.model = self.accelerator.prepare(self.model)
             self.device = torch.device(f"{self.accelerator.device}")
             self._rank = self.accelerator.local_process_index
             self._world_size = self.accelerator.num_processes
         else:
-            self.model = self.model.to(device)
+            if not quantized:
+                self.model = self.model.to(device)
             self._rank = 0
             self._world_size = 1
 
         self.mask_id = mask_id
         self.tokenizer = AutoTokenizer.from_pretrained(
-            model_path,
+            tokenizer_path or model_path,
             trust_remote_code=True,
         )
 
@@ -255,6 +262,34 @@ class LLaDAEvalHarness(LM):
     @property
     def world_size(self):
         return self._world_size
+
+    @property
+    def tokenizer_name(self) -> str:
+        """Identifier used by lm-eval when fingerprinting chat prompts."""
+        return str(getattr(self.tokenizer, "name_or_path", "LLaDA-tokenizer"))
+
+    def chat_template(self, chat_template=False):
+        """Return the tokenizer's trained chat template for reproducibility."""
+        if chat_template is False or chat_template is None:
+            return None
+        template = getattr(self.tokenizer, "chat_template", None)
+        if isinstance(template, dict):
+            if isinstance(chat_template, str):
+                return template[chat_template]
+            if "default" in template:
+                return template["default"]
+            raise ValueError(
+                "Tokenizer has multiple chat templates but no default template"
+            )
+        return template
+
+    def apply_chat_template(self, chat_history, add_generation_prompt=True) -> str:
+        """Format lm-eval chat messages with the model tokenizer."""
+        return self.tokenizer.apply_chat_template(
+            chat_history,
+            tokenize=False,
+            add_generation_prompt=add_generation_prompt,
+        )
 
     def _forward_process(self, batch, prompt_index):
         batch_size, sequence_length = batch.shape

@@ -1,0 +1,2 @@
+task,task_label,setting,calibration_size,gen_length,evaluated_examples,logged_generations,mean_nfe,mean_decode_seconds,nfe_speedup,wallclock_speedup,primary_delta_vs_standard,log_file,result_dir
+ifeval,IFEval,fixed_0.90,,512,541,541,202.95748613678373,11.274796118299445,nan,nan,nan,ifeval_fixed_threshold_thr0.90_len512_block32.log,/leonardo_scratch/large/userexternal/mcao0000/prophet-runs/rebuttal-ifeval/results/ifeval_fixed_apd_thr0.90_len512_block32

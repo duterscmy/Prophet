@@ -1,0 +1,4 @@
+benchmark,fixed_correct_tc_correct,fixed_correct_tc_incorrect,fixed_incorrect_tc_correct,fixed_incorrect_tc_incorrect
+GSM8K,905,49,61,304
+MATH500,143,11,18,328
+HumanEval,59,2,3,100

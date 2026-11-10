@@ -1,0 +1,10 @@
+include: ../../lm-eval-tasks/minerva_math_algebra.yaml
+task: minerva_math500_leonardo
+dataset_path: json
+dataset_name: null
+dataset_kwargs:
+  data_files:
+    test: /leonardo_scratch/large/userexternal/mcao0000/huggingface/dataset-repos/math500-test/test.jsonl
+training_split: null
+test_split: test
+num_fewshot: 0

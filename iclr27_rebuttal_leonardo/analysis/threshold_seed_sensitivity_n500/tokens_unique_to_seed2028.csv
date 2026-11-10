@@ -1,0 +1,44 @@
+token_id,token_piece,decoded_text,present_seed2027,threshold_seed2027,total_count_seed2027,accepted_seed2027,present_seed2028,threshold_seed2028,total_count_seed2028,accepted_seed2028,present_seed2029,threshold_seed2029,total_count_seed2029,accepted_seed2029,num_seeds_present,membership,threshold_mean_present,threshold_range_present,min_total_count_present,mean_total_count_present
+8039,Ġzero, zero,False,,256,0,True,0.45,645,238,False,,0,0,1,010,0.45,0.0,645,645.0
+50,S,S,False,,348,0,True,0.645,629,204,False,,408,0,1,010,0.645,0.0,629,629.0
+35823,Ġcubic, cubic,False,,233,0,True,0.88,556,111,False,,0,0,1,010,0.88,0.0,556,556.0
+11780,Ġangle, angle,False,,354,0,True,0.805,529,133,False,,0,0,1,010,0.805,0.0,529,529.0
+1265,als,als,False,,0,0,True,0.59,487,101,False,,0,0,1,010,0.59,0.0,487,487.0
+1944,Ġ>, >,False,,435,0,True,0.56,482,216,False,,419,0,1,010,0.56,0.0,482,482.0
+7665,(g,(g,False,,0,0,True,0.68,462,116,False,,0,0,1,010,0.68,0.0,462,462.0
+9527,theta,theta,False,,259,0,True,0.4,439,226,False,,0,0,1,010,0.4,0.0,439,439.0
+6281,Ġheight, height,False,,217,0,True,0.57,425,246,False,,250,0,1,010,0.57,0.0,425,425.0
+3361,Ġtogether, together,False,,379,0,True,0.535,415,160,False,,306,0,1,010,0.535,0.0,415,415.0
+24080,Ġdenominator, denominator,False,,208,0,True,0.645,404,182,False,,258,0,1,010,0.645,0.0,404,404.0
+1117,Ġset, set,False,,280,0,True,0.59,382,127,False,,239,0,1,010,0.59,0.0,382,382.0
+809,ĠV, V,False,,0,0,True,0.415,379,254,False,,0,0,1,010,0.415,0.0,379,379.0
+34611,Ġrewrite, rewrite,False,,244,0,True,0.43,366,185,False,,278,0,1,010,0.43,0.0,366,366.0
+4374,Ġgames, games,False,,0,0,True,0.715,351,120,False,,372,0,1,010,0.715,0.0,351,351.0
+11679,ola,ola,False,,330,0,True,0.66,350,105,False,,0,0,1,010,0.66,0.0,350,350.0
+86063,$',$',False,,0,0,True,0.335,342,103,False,,0,0,1,010,0.335,0.0,342,342.0
+4881,Ġbox, box,False,,0,0,True,0.57,336,149,False,,0,0,1,010,0.57,0.0,336,336.0
+16629,star,star,False,,0,0,True,0.7,333,111,False,,0,0,1,010,0.7,0.0,333,333.0
+76576,ĠDivide, Divide,False,,0,0,True,0.555,329,252,False,,0,0,1,010,0.555,0.0,329,329.0
+5846,Ġgraph, graph,False,,0,0,True,0.585,327,160,False,,434,0,1,010,0.585,0.0,327,327.0
+44,M,M,False,,349,0,True,0.555,314,139,False,,475,0,1,010,0.555,0.0,314,314.0
+3654,Ġwin, win,False,,0,0,True,0.71,310,100,False,,0,0,1,010,0.71,0.0,310,310.0
+28943,}^\,}^\,False,,0,0,True,0.495,306,158,False,,413,0,1,010,0.495,0.0,306,306.0
+13961,axis,axis,False,,0,0,True,0.47,296,139,False,,0,0,1,010,0.47,0.0,296,296.0
+2397,DE,DE,False,,263,0,True,0.595,294,164,False,,0,0,1,010,0.595,0.0,294,294.0
+6530,}^,}^,False,,0,0,True,0.735,289,172,False,,0,0,1,010,0.735,0.0,289,289.0
+4819,Ġsolution, solution,False,,290,0,True,0.665,287,110,False,,380,0,1,010,0.665,0.0,287,287.0
+8372,Ġbecomes, becomes,False,,279,0,True,0.6,281,127,False,,233,0,1,010,0.6,0.0,281,281.0
+62462,ĠSimpl, Simpl,False,,0,0,True,0.475,280,169,False,,0,0,1,010,0.475,0.0,280,280.0
+121920,}}.,}}.,False,,0,0,True,0.605,275,171,False,,299,0,1,010,0.605,0.0,275,275.0
+51578,.**,.**,False,,0,0,True,0.805,259,109,False,,0,0,1,010,0.805,0.0,259,259.0
+27753,{k,{k,False,,0,0,True,0.725,250,116,False,,0,0,1,010,0.725,0.0,250,250.0
+6234,itute,itute,False,,409,0,True,0.525,245,140,False,,208,0,1,010,0.525,0.0,245,245.0
+4493,Ġpaper, paper,False,,0,0,True,0.52,230,135,False,,0,0,1,010,0.52,0.0,230,230.0
+69892,}.$$,}.$$,False,,0,0,True,0.655,230,105,False,,0,0,1,010,0.655,0.0,230,230.0
+11079,Ġdistinct, distinct,False,,0,0,True,0.39,227,135,False,,215,0,1,010,0.39,0.0,227,227.0
+1896,ify,ify,False,,0,0,True,0.37,218,172,False,,0,0,1,010,0.37,0.0,218,218.0
+5144,Ġfoot, foot,False,,0,0,True,0.415,216,111,False,,0,0,1,010,0.415,0.0,216,216.0
+7511,-r,-r,False,,0,0,True,0.58,216,111,False,,0,0,1,010,0.58,0.0,216,216.0
+94205,Subtract,Subtract,False,,279,0,True,0.525,211,117,False,,0,0,1,010,0.525,0.0,211,211.0
+6759,Number,Number,False,,0,0,True,0.395,204,147,False,,0,0,1,010,0.395,0.0,204,204.0
+15319,Ġfaces, faces,False,,0,0,True,0.57,204,125,False,,0,0,1,010,0.57,0.0,204,204.0

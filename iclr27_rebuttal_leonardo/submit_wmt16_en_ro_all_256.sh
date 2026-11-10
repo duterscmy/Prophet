@@ -1,0 +1,47 @@
+#!/bin/bash
+
+set -euo pipefail
+
+PROJECT_ROOT=/leonardo/home/userexternal/mcao0000/prophet
+RUN_ROOT=/leonardo_scratch/large/userexternal/mcao0000/prophet-runs/rebuttal-wmt16-en-ro
+SCRIPT="${PROJECT_ROOT}/iclr27_rebuttal_leonardo/eval_wmt16_en_ro_setting_array.sh"
+
+mkdir -p "${RUN_ROOT}/scheduler" "${RUN_ROOT}/logs" "${RUN_ROOT}/results"
+cd "${PROJECT_ROOT}"
+
+STANDARD_JOB=$(sbatch --parsable \
+  --job-name=iclr27_wmt16enro_standard_l256 \
+  --account=EUHPC_D36_236 \
+  --partition=boost_usr_prod \
+  --qos=boost_qos_lprod \
+  --time=08:00:00 \
+  --nodes=1 \
+  --ntasks=1 \
+  --gres=gpu:1 \
+  --cpus-per-task=8 \
+  --mem=80G \
+  --output="${RUN_ROOT}/scheduler/wmt16-en-ro-standard-len256-%j.out" \
+  --error="${RUN_ROOT}/scheduler/wmt16-en-ro-standard-len256-%j.err" \
+  --export=ALL,EXPERIMENT=standard \
+  "${SCRIPT}")
+
+SIZE_JOB=$(sbatch --parsable \
+  --job-name=iclr27_wmt16enro_sizes_l256 \
+  --account=EUHPC_D36_236 \
+  --partition=boost_usr_prod \
+  --qos=boost_qos_lprod \
+  --time=03:00:00 \
+  --nodes=1 \
+  --ntasks=1 \
+  --gres=gpu:1 \
+  --cpus-per-task=8 \
+  --mem=80G \
+  --array=0-5 \
+  --output="${RUN_ROOT}/scheduler/wmt16-en-ro-sizes-len256-%A_%a.out" \
+  --error="${RUN_ROOT}/scheduler/wmt16-en-ro-sizes-len256-%A_%a.err" \
+  --export=ALL,EXPERIMENT=calibration_size \
+  "${SCRIPT}")
+
+echo "wmt16_en_ro_standard_len256=${STANDARD_JOB}"
+echo "wmt16_en_ro_math_sizes_len256=${SIZE_JOB}"
+echo "wmt16_en_ro_fixed09_len256=63853474 (already running)"

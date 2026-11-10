@@ -1,0 +1,25 @@
+token_id,token_piece,decoded_text,present_seed2027,threshold_seed2027,total_count_seed2027,accepted_seed2027,present_seed2028,threshold_seed2028,total_count_seed2028,accepted_seed2028,present_seed2029,threshold_seed2029,total_count_seed2029,accepted_seed2029,num_seeds_present,membership,threshold_mean_present,threshold_range_present,min_total_count_present,mean_total_count_present
+320,Ġn, n,True,0.54,790,109,False,,0,0,False,,0,0,1,100,0.54,0.0,790,790.0
+79,p,p,True,0.615,631,226,False,,0,0,False,,0,0,1,100,0.615,0.0,631,631.0
+11645,Ġcm, cm,True,0.54,469,223,False,,0,0,False,,0,0,1,100,0.54,0.0,469,469.0
+13712,Ġdigit, digit,True,0.665,440,110,False,,214,0,False,,0,0,1,100,0.665,0.0,440,440.0
+16334,Ġ&=, &=,True,0.7,421,245,False,,0,0,False,,0,0,1,100,0.7,0.0,421,421.0
+408,ab,ab,True,0.77,389,103,False,,0,0,False,,0,0,1,100,0.77,0.0,389,389.0
+13529,Ġ\\, \\,True,0.675,380,227,False,,0,0,False,,0,0,1,100,0.675,0.0,380,380.0
+1307,Ġtwo, two,True,0.665,373,102,False,,214,0,False,,0,0,1,100,0.665,0.0,373,373.0
+1451,)),)),True,0.575,373,129,False,,0,0,False,,298,0,1,100,0.575,0.0,373,373.0
+91,|,|,True,0.895,367,132,False,,205,0,False,,0,0,1,100,0.895,0.0,367,367.0
+498,Ġr, r,True,0.775,352,106,False,,469,0,False,,0,0,1,100,0.775,0.0,352,352.0
+89,z,z,True,0.575,320,107,False,,0,0,False,,0,0,1,100,0.575,0.0,320,320.0
+4640,Ġways, ways,True,0.605,308,158,False,,0,0,False,,0,0,1,100,0.605,0.0,308,308.0
+67,d,d,True,0.555,303,125,False,,0,0,False,,0,0,1,100,0.555,0.0,303,303.0
+80,q,q,True,0.795,299,109,False,,0,0,False,,0,0,1,100,0.795,0.0,299,299.0
+654,Ġall, all,True,0.6,298,109,False,,0,0,False,,0,0,1,100,0.6,0.0,298,298.0
+2747,(f,(f,True,0.61,294,101,False,,0,0,False,,0,0,1,100,0.61,0.0,294,294.0
+28477,Ġdigits, digits,True,0.375,280,153,False,,0,0,False,,282,0,1,100,0.375,0.0,280,280.0
+1946,Ġboth, both,True,0.405,267,190,False,,261,0,False,,265,0,1,100,0.405,0.0,267,267.0
+31,@,@,True,0.36,246,189,False,,0,0,False,,0,0,1,100,0.36,0.0,246,246.0
+413,ĠB, B,True,0.68,243,127,False,,0,0,False,,0,0,1,100,0.68,0.0,243,243.0
+4592,pi,pi,True,0.545,233,119,False,,0,0,False,,0,0,1,100,0.545,0.0,233,233.0
+10988,Ġsides, sides,True,0.415,223,156,False,,306,0,False,,290,0,1,100,0.415,0.0,223,223.0
+3766,Ġanswer, answer,True,0.505,215,143,False,,0,0,False,,0,0,1,100,0.505,0.0,215,215.0

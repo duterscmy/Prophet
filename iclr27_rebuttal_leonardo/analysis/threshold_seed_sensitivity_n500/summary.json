@@ -1,0 +1,33 @@
+{
+  "seeds": [
+    2027,
+    2028,
+    2029
+  ],
+  "source_tables": {
+    "2027": {
+      "json": "/leonardo_scratch/large/userexternal/mcao0000/prophet-runs/rebuttal-seed-sensitivity-n500/thresholds/seed2027/math_n500_seed2027_token_threshold_grid_p99.5_mincount200_minaccepted100.json",
+      "csv": "/leonardo_scratch/large/userexternal/mcao0000/prophet-runs/rebuttal-seed-sensitivity-n500/thresholds/seed2027/math_n500_seed2027_token_threshold_grid_p99.5_mincount200_minaccepted100.csv"
+    },
+    "2028": {
+      "json": "/leonardo_scratch/large/userexternal/mcao0000/prophet-runs/rebuttal-seed-sensitivity-n500/thresholds/seed2028/math_n500_seed2028_token_threshold_grid_p99.5_mincount200_minaccepted100.json",
+      "csv": "/leonardo_scratch/large/userexternal/mcao0000/prophet-runs/rebuttal-seed-sensitivity-n500/thresholds/seed2028/math_n500_seed2028_token_threshold_grid_p99.5_mincount200_minaccepted100.csv"
+    },
+    "2029": {
+      "json": "/leonardo_scratch/large/userexternal/mcao0000/prophet-runs/rebuttal-seed-sensitivity-n500/thresholds/seed2029/math_n500_seed2029_token_threshold_grid_p99.5_mincount200_minaccepted100.json",
+      "csv": "/leonardo_scratch/large/userexternal/mcao0000/prophet-runs/rebuttal-seed-sensitivity-n500/thresholds/seed2029/math_n500_seed2029_token_threshold_grid_p99.5_mincount200_minaccepted100.csv"
+    }
+  },
+  "union_token_ids": 550,
+  "intersection_token_ids": 301,
+  "intersection_over_union_pct": 54.72727272727273,
+  "tokens_in_exactly_one_seed": 144,
+  "tokens_in_exactly_two_seeds": 105,
+  "tokens_in_all_three_seeds": 301,
+  "all_three_threshold_exact_agreement_pct": 0.0,
+  "all_three_threshold_range_le_0.01_pct": 0.9966777408637874,
+  "all_three_threshold_range_le_0.05_pct": 13.2890365448505,
+  "all_three_mean_threshold_range": 0.1546843853820598,
+  "all_three_median_threshold_range": 0.135,
+  "all_three_p90_threshold_range": 0.28
+}

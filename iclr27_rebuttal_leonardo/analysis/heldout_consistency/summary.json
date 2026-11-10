@@ -1,0 +1,40 @@
+{
+  "source_log": "/leonardo_scratch/large/userexternal/mcao0000/prophet-runs/calibration-logs/complete/math500_train_standard-len256-block32.log",
+  "seed": 2027,
+  "rho": 0.995,
+  "split": {
+    "total_traces": 5000,
+    "estimation_traces": 4000,
+    "heldout_traces": 1000,
+    "estimation_candidate_records": 16896000,
+    "heldout_candidate_records": 4224000
+  },
+  "calibration": {
+    "observed_token_ids": 6150,
+    "eligible_token_ids": 1711,
+    "calibrated_token_ids": 1290,
+    "fallback_no_valid_threshold_token_ids": 421,
+    "runtime_clipped_token_ids": 41
+  },
+  "heldout_token_level": {
+    "tokens_with_raw_accepted_support": 1233,
+    "tokens_meeting_empirical_rho_raw_pct": 70.96512570965126,
+    "tokens_wilson_low_meeting_rho_raw_pct": 3.0819140308191404,
+    "macro_precision_raw": 0.979254820715144,
+    "tokens_with_deployed_accepted_support": 1233,
+    "tokens_meeting_empirical_rho_deployed_pct": 70.72181670721817,
+    "tokens_wilson_low_meeting_rho_deployed_pct": 3.0819140308191404,
+    "macro_precision_deployed": 0.979088999475426
+  },
+  "full_lookup_policy": {
+    "total_records": 4224000,
+    "accepted": 1565252,
+    "success": 1556600,
+    "accepted_calibrated_token": 1546522,
+    "success_calibrated_token": 1537888,
+    "accepted_default_token": 18730,
+    "success_default_token": 18712,
+    "precision": 0.9944724555534827,
+    "accepted_coverage_pct_of_candidate_records": 37.0561553030303
+  }
+}

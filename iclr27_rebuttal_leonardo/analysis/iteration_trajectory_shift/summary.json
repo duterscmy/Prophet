@@ -1,0 +1,38 @@
+{
+  "paired_traces": 500,
+  "generation_length": 256,
+  "standard_policy_eligible": {
+    "candidate_population": "standard_trajectory_policy_eligible",
+    "observations": 963585,
+    "agreements": 954556,
+    "agreement_pct": 99.06297835686524
+  },
+  "tc_policy_eligible_vs_standard_final": {
+    "candidate_population": "tc_trajectory_policy_eligible_vs_standard_final",
+    "observations": 119370,
+    "agreements": 74511,
+    "agreement_pct": 62.42020608193013
+  },
+  "tc_selected_commits_vs_standard_final": {
+    "candidate_population": "tc_selected_commits_vs_standard_final",
+    "observations": 128000,
+    "agreements": 80581,
+    "agreement_pct": 62.95390625
+  },
+  "standard_calibrated_uncapped": {
+    "candidate_population": "standard_trajectory_calibrated_uncapped",
+    "observations": 864199,
+    "agreements": 855333,
+    "agreement_pct": 98.97407888692304
+  },
+  "standard_calibrated_clipped_at_max": {
+    "candidate_population": "standard_trajectory_calibrated_clipped_at_max",
+    "observations": 1644,
+    "agreements": 1643,
+    "agreement_pct": 99.93917274939173
+  },
+  "policy_agreement_shift_pp": -36.64277227493511,
+  "final_position_agreement_pct": 62.95390625,
+  "exact_full_256_token_sequence_pct": 20.599999999999998,
+  "mean_tc_nfe": 57.224
+}

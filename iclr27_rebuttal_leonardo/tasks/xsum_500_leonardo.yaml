@@ -1,0 +1,33 @@
+task: xsum_500_leonardo
+dataset_path: json
+dataset_name: null
+dataset_kwargs:
+  data_files:
+    test: /leonardo_scratch/large/userexternal/mcao0000/huggingface/dataset-repos/xsum-500-seed2027/test.jsonl
+output_type: generate_until
+training_split: null
+validation_split: null
+test_split: test
+num_fewshot: 0
+doc_to_text: "Summarize the following BBC article in one concise sentence.\n\nArticle:\n{{document}}\n\nSummary:"
+doc_to_target: "{{summary}}"
+generation_kwargs:
+  until:
+    - "\n\n"
+    - "<|eot_id|>"
+  do_sample: false
+process_results: !function xsum_500_utils.process_results
+metric_list:
+  - metric: rouge1
+    aggregation: mean
+    higher_is_better: true
+  - metric: rouge2
+    aggregation: mean
+    higher_is_better: true
+  - metric: rougeL
+    aggregation: mean
+    higher_is_better: true
+metadata:
+  version: 1.0
+  subset_seed: 2027
+  subset_size: 500

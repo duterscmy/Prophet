@@ -1,0 +1,44 @@
+task: writingprompts_100_leonardo
+dataset_path: json
+dataset_name: null
+dataset_kwargs:
+  data_files:
+    test: /leonardo_scratch/large/userexternal/mcao0000/huggingface/dataset-repos/writingprompts-100-seed2027/test.jsonl
+output_type: generate_until
+training_split: null
+validation_split: null
+test_split: test
+num_fewshot: 0
+doc_to_text: "Write a coherent, engaging long-form story based on the following writing prompt. Develop the characters and events across multiple paragraphs, use the available space, and return only the story.\n\nWriting prompt:\n{{prompt}}\n\nStory:"
+doc_to_target: "{{story}}"
+generation_kwargs:
+  until:
+    - "<|eot_id|>"
+    - "</s>"
+  do_sample: false
+process_results: !function writingprompts_100_utils.process_results
+metric_list:
+  - metric: word_count
+    aggregation: mean
+    higher_is_better: true
+  - metric: distinct_4
+    aggregation: mean
+    higher_is_better: true
+  - metric: distinct_8
+    aggregation: mean
+    higher_is_better: true
+  - metric: repetition_4
+    aggregation: mean
+    higher_is_better: false
+  - metric: repetition_8
+    aggregation: mean
+    higher_is_better: false
+  - metric: sentence_repetition
+    aggregation: mean
+    higher_is_better: false
+metadata:
+  version: 1.0
+  source_dataset: euclaise/writingprompts
+  source_split: test
+  subset_seed: 2027
+  subset_size: 100
