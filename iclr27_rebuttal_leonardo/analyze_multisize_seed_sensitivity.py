@@ -11,9 +11,12 @@ rows plus a ``Mean +- Std`` row using the sample standard deviation
 Definitions, kept identical to the P0.1 calibration-size tables:
 
 * ``NFE`` and ``s/it`` are means over per-example decoder statistics.
-* ``SpeedUp`` is the wall-clock ratio ``Standard s/it / setting s/it``
-  computed per task; the ``Avg`` column averages the three per-task
-  ratios.  The NFE ratio is reported separately and never mixed in.
+* ``SpeedUp`` is the NFE ratio ``Standard NFE / setting NFE``, per task.
+  ``Avg SpeedUp`` is the ratio of the *macro-averaged* NFE values --
+  NFE is averaged across the three benchmarks first, and the speedup is
+  the ratio of those two averages -- not the mean of three separate
+  per-task speedup ratios, which would overweight a benchmark with a
+  small NFE denominator.
 """
 
 from __future__ import annotations
@@ -299,11 +302,11 @@ def main() -> None:
 
     def baseline_row(setting: str, label: str) -> dict[str, Any]:
         row: dict[str, Any] = {"setting": label, "seeds_used": ""}
-        accs, nfes, secs, ups = [], [], [], []
+        accs, nfes, secs, standard_nfes = [], [], [], []
         for benchmark in BENCHMARKS:
             run = baselines[setting][benchmark]
             standard = baselines["standard"][benchmark]
-            speedup = standard["seconds_per_item"] / run["seconds_per_item"]
+            speedup = standard["mean_nfe"] / run["mean_nfe"]
             row[f"{DISPLAY[benchmark]} Acc"] = fmt(run["accuracy_pct"])
             row[f"{DISPLAY[benchmark]} NFE"] = fmt(run["mean_nfe"])
             row[f"{DISPLAY[benchmark]} s/it"] = fmt(run["seconds_per_item"], 3)
@@ -311,11 +314,13 @@ def main() -> None:
             accs.append(run["accuracy_pct"])
             nfes.append(run["mean_nfe"])
             secs.append(run["seconds_per_item"])
-            ups.append(speedup)
+            standard_nfes.append(standard["mean_nfe"])
         row["Avg Acc"] = fmt(macro(accs))
         row["Avg NFE"] = fmt(macro(nfes))
         row["Avg s/it"] = fmt(macro(secs), 3)
-        row["Avg SpeedUp"] = fmt(macro(ups))
+        # Ratio of macro-averaged NFE (average NFE across benchmarks first,
+        # then divide), not the mean of three per-benchmark speedup ratios.
+        row["Avg SpeedUp"] = fmt(macro(standard_nfes) / macro(nfes))
         return row
 
     table_rows = [
@@ -323,12 +328,15 @@ def main() -> None:
         baseline_row("fixed", "Fixed threshold 0.90"),
     ]
 
+    standard_macro_nfe = macro(
+        [baselines["standard"][benchmark]["mean_nfe"] for benchmark in BENCHMARKS]
+    )
     stats_rows: list[dict[str, Any]] = []
     for size in SIZES:
         per_seed_macro: dict[int, dict[str, float]] = {}
         for seed in SEEDS:
             row: dict[str, Any] = {"setting": f"Math-{size} seed {seed}", "seeds_used": "1"}
-            accs, nfes, secs, ups = [], [], [], []
+            accs, nfes, secs = [], [], []
             for benchmark in BENCHMARKS:
                 run = runs.get((size, seed, benchmark))
                 label = DISPLAY[benchmark]
@@ -338,25 +346,27 @@ def main() -> None:
                     accs.append(math.nan)
                     nfes.append(math.nan)
                     secs.append(math.nan)
-                    ups.append(math.nan)
                     continue
                 row[f"{label} Acc"] = fmt(run["accuracy_pct"])
                 row[f"{label} NFE"] = fmt(run["mean_nfe"])
                 row[f"{label} s/it"] = fmt(run["seconds_per_item"], 3)
-                row[f"{label} SpeedUp"] = fmt(run["wallclock_speedup_vs_standard"])
+                row[f"{label} SpeedUp"] = fmt(run["nfe_speedup_vs_standard"])
                 accs.append(run["accuracy_pct"])
                 nfes.append(run["mean_nfe"])
                 secs.append(run["seconds_per_item"])
-                ups.append(run["wallclock_speedup_vs_standard"])
+            avg_nfe = macro(nfes)
             row["Avg Acc"] = fmt(macro(accs))
-            row["Avg NFE"] = fmt(macro(nfes))
+            row["Avg NFE"] = fmt(avg_nfe)
             row["Avg s/it"] = fmt(macro(secs), 3)
-            row["Avg SpeedUp"] = fmt(macro(ups))
+            # Ratio of macro-averaged NFE (average NFE across benchmarks
+            # first, then divide), not the mean of three per-task ratios.
+            avg_speedup = standard_macro_nfe / avg_nfe if not math.isnan(avg_nfe) else math.nan
+            row["Avg SpeedUp"] = fmt(avg_speedup)
             per_seed_macro[seed] = {
                 "acc": macro(accs),
-                "nfe": macro(nfes),
+                "nfe": avg_nfe,
                 "sec": macro(secs),
-                "up": macro(ups),
+                "up": avg_speedup,
             }
             table_rows.append(row)
 
@@ -375,7 +385,7 @@ def main() -> None:
                 ("Acc", "accuracy_pct", 2),
                 ("NFE", "mean_nfe", 2),
                 ("s/it", "seconds_per_item", 3),
-                ("SpeedUp", "wallclock_speedup_vs_standard", 2),
+                ("SpeedUp", "nfe_speedup_vs_standard", 2),
             ]:
                 mean, std, count = mean_std([run[key] for run in present])
                 summary_row[f"{label} {field}"] = pm(mean, std, digits, count)
@@ -478,8 +488,10 @@ def main() -> None:
         "benchmarks": BENCHMARKS,
         "std_convention": "sample standard deviation, ddof=1",
         "speedup_convention": (
-            "per-task wall-clock ratio Standard (s/it) / setting (s/it); "
-            "Avg SpeedUp is the mean of the three per-task ratios"
+            "per-task NFE ratio Standard NFE / setting NFE; Avg SpeedUp is "
+            "the ratio of the macro-averaged NFE values (average NFE across "
+            "benchmarks first, then divide), not the mean of three per-task "
+            "ratios"
         ),
         "completed_runs": len(per_run),
         "missing_runs": missing,
@@ -500,10 +512,12 @@ def main() -> None:
         "min threshold=0.01`.",
         "",
         "`±` is the sample standard deviation across the three subset seeds",
-        "(`ddof=1`). `SpeedUp` is the per-task wall-clock ratio",
-        "`Standard (s/it) / setting (s/it)`; `Avg SpeedUp` averages the three",
-        "per-task ratios. NFE ratios are kept separate in",
-        "`multiseed_per_run.csv` and are never mixed into this column.",
+        "(`ddof=1`). `SpeedUp` is the per-task NFE ratio",
+        "`Standard NFE / setting NFE`. `Avg SpeedUp` is the ratio of the",
+        "*macro-averaged* NFE values -- NFE is averaged across the three",
+        "benchmarks first, and the speedup is the ratio of those two",
+        "averages -- not the mean of three separate per-task speedup ratios,",
+        "which would overweight a benchmark with a small NFE denominator.",
         "",
         "| Setting | "
         + " | ".join(columns)

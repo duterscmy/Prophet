@@ -24,11 +24,12 @@ HumanEval = **35.98**, so the macro average is **46.81**, not 47.42. The 37.8
 appears to have been copied from the 5,000 row. The reply uses the corrected
 values. Source: `iclr27_rebuttal_leonardo/analysis/multisize_seed_sensitivity/multiseed_per_run.csv`.
 
-`SpeedUp` in that table is kept at the draft's definition, Standard macro NFE /
-setting macro NFE (256 / Avg NFE), which reproduces the draft column exactly. Note
-that `analysis/multisize_seed_sensitivity/` uses the other convention (mean of
-per-task ratios, e.g. 3.61 instead of 3.57 at size 100). Both are stated in their
-own documents; just do not mix them inside one table.
+`SpeedUp` in that table is the draft's definition, Standard macro NFE /
+setting macro NFE (256 / Avg NFE) -- i.e. average NFE across the three
+benchmarks first, then take the ratio. `analyze_calibration_size.py` and
+`analyze_multisize_seed_sensitivity.py` were both patched to use this
+convention everywhere a SpeedUp is aggregated across benchmarks or seeds (see
+note 7); they no longer disagree with each other or with the draft.
 
 ## 3. Calibration-source disclosure needs your confirmation
 
@@ -77,3 +78,26 @@ report flags this automatically.
 
 Both are marked as such in the generated reports, and the affected speedup cells
 are left empty rather than compared across configurations.
+
+## 7. SpeedUp convention fixed across the analysis scripts (2026-11-10)
+
+Two scripts previously computed an aggregate "SpeedUp" as the **mean of three
+per-benchmark speedup ratios** (e.g. mean(256/59.71, 256/82.38, 256/72.87) =
+3.64 for Math-100), which overweights whichever benchmark has the smallest NFE
+denominator. Per the user's instruction, both were changed to compute the
+**ratio of the macro-averaged NFE values** instead (average NFE across the
+three benchmarks first, then divide: 256/mean(59.71,82.38,72.87) = 256/71.65 =
+3.57), matching the user's own draft table exactly.
+
+Fixed in `iclr27_rebuttal_leonardo/analyze_calibration_size.py`
+(`make_macro_table`, `make_full_comparison`; also switched the per-benchmark
+"{task} Speedup" column from a wall-clock to an NFE basis) and
+`iclr27_rebuttal_leonardo/analyze_multisize_seed_sensitivity.py`
+(`baseline_row`, the per-seed loop, and the Mean +- Std summary row). Both
+were re-run; `analysis/calibration_size/` and
+`analysis/multisize_seed_sensitivity/` now hold the corrected numbers, and
+`iclr2027_rebuttal_responses.md` already used the correct convention in its
+calibration-size table (no edit was needed there). Per-task NFE and
+wall-clock speedups (single benchmark, not aggregated) were already correct
+and are unaffected; `multiseed_per_run.csv` still keeps the raw wall-clock
+ratio alongside the NFE ratio for transparency.

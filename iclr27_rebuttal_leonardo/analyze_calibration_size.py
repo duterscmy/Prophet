@@ -284,15 +284,24 @@ def make_macro_table(
     coverage: pd.DataFrame,
 ) -> pd.DataFrame:
     dynamic = evaluation[evaluation.setting == "dynamic"]
+    standard = evaluation[evaluation.setting == "standard"]
+    standard_macro_mean_nfe = standard.mean_nfe.mean()
+    standard_macro_mean_seconds = standard.mean_seconds_per_item.mean()
     macro = (
         dynamic.groupby("calibration_size", as_index=False)
         .agg(
             macro_accuracy_pct=("accuracy_pct", "mean"),
             macro_mean_nfe=("mean_nfe", "mean"),
             macro_seconds_per_item=("mean_seconds_per_item", "mean"),
-            macro_nfe_speedup=("nfe_speedup_vs_standard", "mean"),
-            macro_wallclock_speedup=("wallclock_speedup_vs_standard", "mean"),
         )
+    )
+    # Speedup is the macro-averaged NFE (or seconds) ratio, i.e. average NFE
+    # across benchmarks first, then divide -- not the mean of three separate
+    # per-benchmark speedup ratios, which would overweight benchmarks with a
+    # small denominator.
+    macro["macro_nfe_speedup"] = standard_macro_mean_nfe / macro["macro_mean_nfe"]
+    macro["macro_wallclock_speedup"] = (
+        standard_macro_mean_seconds / macro["macro_seconds_per_item"]
     )
     pooled = coverage[
         [
@@ -313,6 +322,9 @@ def make_full_comparison(
     macro: pd.DataFrame,
 ) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
+    standard_macro_mean_nfe = (
+        evaluation[evaluation.setting == "standard"].mean_nfe.mean()
+    )
     settings = [("Standard", "standard", None), ("Fixed threshold 0.90", "fixed", None)]
     settings += [
         (f"Math calibration, {size} trajectories", "dynamic", size)
@@ -329,11 +341,14 @@ def make_full_comparison(
             row[f"{prefix} Acc"] = item.accuracy_pct
             row[f"{prefix} NFE"] = item.mean_nfe
             row[f"{prefix} s/it"] = item.mean_seconds_per_item
-            row[f"{prefix} Speedup"] = item.wallclock_speedup_vs_standard
+            row[f"{prefix} Speedup"] = item.nfe_speedup_vs_standard
         row["Macro Acc"] = part.accuracy_pct.mean()
         row["Macro NFE"] = part.mean_nfe.mean()
         row["Macro s/it"] = part.mean_seconds_per_item.mean()
-        row["Macro Speedup"] = part.wallclock_speedup_vs_standard.mean()
+        # Ratio of the macro-averaged NFE values (average NFE across the three
+        # benchmarks first, then divide), not the mean of three separate
+        # per-benchmark speedup ratios.
+        row["Macro Speedup"] = standard_macro_mean_nfe / row["Macro NFE"]
         if size is None:
             row["Valid token thresholds"] = math.nan
             row["Output-token coverage"] = math.nan
@@ -537,6 +552,11 @@ def write_markdown(
         "",
         "Single calibration-subset seed: 2027. Accuracy metrics are HumanEval pass@1, "
         "MATH500 math_verify, and GSM8K flexible-extract.",
+        "",
+        "Every speedup below is the ratio of macro-averaged values: NFE (or seconds) is "
+        "averaged across the three benchmarks first, and the speedup is the ratio of "
+        "those two averages, not the mean of three separate per-benchmark ratios. The "
+        "unqualified `Speedup` columns use NFE as the basis.",
         "",
         "## Main summary",
         "",
